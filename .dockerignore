@@ -1,3 +1,5 @@
 node_modules
 dist
 .git
+# Bind-mounted at run time; it has no business in the build context.
+resources

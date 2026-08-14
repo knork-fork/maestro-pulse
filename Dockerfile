@@ -9,8 +9,18 @@ COPY tsconfig.json vite.config.ts index.html ./
 COPY src/ ./src/
 RUN npm run build
 
-# ---- serve the built assets ----
-FROM nginx:1.27-alpine
+# ---- the projects API (no dependencies, so nothing to install) ----
+FROM node:22-alpine AS api
+
+WORKDIR /app
+COPY server/ ./server/
+
+ENV PROJECTS_ROOT=/resources/projects
+EXPOSE 20445
+CMD ["node", "server/index.mjs"]
+
+# ---- serve the built assets (the default stage) ----
+FROM nginx:1.27-alpine AS serve
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html

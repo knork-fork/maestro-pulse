@@ -1,0 +1,3 @@
+# The project store is machine-local: it holds whatever the user creates or
+# drops in, and never belongs to this repo. Only this file is tracked.
+projects/

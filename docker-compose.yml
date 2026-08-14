@@ -1,7 +1,23 @@
 services:
   web:
-    build: .
+    build:
+      context: .
+      target: serve
     container_name: maestro-pulse
     ports:
       - "20444:20444"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      target: api
+    container_name: maestro-pulse-api
+    # It writes into the host's working tree, so it must not do so as root.
+    # Override UID/GID if yours are not 1000.
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./resources:/resources
     restart: unless-stopped
