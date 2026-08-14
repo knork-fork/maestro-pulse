@@ -164,6 +164,7 @@ const parseCards = (value: unknown): WorkflowCard[] =>
           column?: unknown
           assigned?: unknown
           status?: unknown
+          last_activity?: unknown
         }
         return typeof card.id === 'string' && typeof card.title === 'string' && typeof card.column === 'string'
           ? [
@@ -174,6 +175,7 @@ const parseCards = (value: unknown): WorkflowCard[] =>
                 column: card.column,
                 assigned: typeof card.assigned === 'string' ? card.assigned : null,
                 status: card.status === 'in_session' || card.status === 'blocked' ? card.status : null,
+                last_activity: typeof card.last_activity === 'string' ? card.last_activity : null,
               },
             ]
           : []

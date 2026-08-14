@@ -504,7 +504,7 @@ function moveRight(cards, index, columns, columnIdx) {
   const target = columns[columnIdx + 1]
   if (!target) throw new HttpError(400, 'There is no column to the right')
 
-  const card = { ...cards[index], column: target.name }
+  const card = { ...cards[index], column: target.name, last_activity: `moved to ${target.name} by user` }
   const withoutCard = cards.filter((_, i) => i !== index)
 
   let insertAt = withoutCard.length

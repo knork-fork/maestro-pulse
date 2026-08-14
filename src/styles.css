@@ -618,7 +618,8 @@ body {
 }
 
 .card-detail__section + .card-detail__section,
-.card-detail__section + .card-detail__attached { margin-top: 12px; }
+.card-detail__section + .card-detail__unboxed,
+.card-detail__unboxed + .card-detail__unboxed { margin-top: 12px; }
 
 .card-detail__section-title {
   margin: 0 0 8px;
@@ -647,7 +648,10 @@ body {
   list-style: none;
 }
 
-.card-detail__attachments-empty {
+/* Shared by "Last activity" and "Attached"'s empty state: a single dashed-pill
+   fact, rather than the bordered prose block Description gets. */
+.card-detail__pill {
+  margin: 0;
   border: 1px dashed var(--border);
   border-radius: 6px;
   padding: 8px 10px;

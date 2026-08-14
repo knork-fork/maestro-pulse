@@ -6,9 +6,12 @@ type Props = { card: WorkflowCard; onCancel: () => void }
 
 /**
  * Read-only: cards can't be edited from the board, so this is just a bigger
- * look at one. "Attached" is a list, not prose — it will hold attached URLs
- * once something produces them; there is no schema field for that yet, so
- * it renders as a list with nothing in it rather than a sentence about it.
+ * look at one. "Last activity" and "Attached" share the same unboxed,
+ * dashed-pill treatment: a single-line fact rather than the bordered prose
+ * block Description gets. "Attached" is a list, not prose — it will hold
+ * attached URLs once something produces them; there is no schema field for
+ * that yet, so it renders as a list with nothing in it rather than a
+ * sentence about it.
  */
 export function CardDetailModal({ card, onCancel }: Props) {
   return (
@@ -22,10 +25,15 @@ export function CardDetailModal({ card, onCancel }: Props) {
         </div>
       </div>
 
-      <div className="card-detail__attached">
+      <div className="card-detail__unboxed">
+        <h3 className="card-detail__section-title">Last activity</h3>
+        <p className="card-detail__pill">{card.last_activity ?? 'No activity yet.'}</p>
+      </div>
+
+      <div className="card-detail__unboxed">
         <h3 className="card-detail__section-title">Attached</h3>
         <ul className="card-detail__attachments">
-          <li className="card-detail__attachments-empty">No links attached yet.</li>
+          <li className="card-detail__pill">No links attached yet.</li>
         </ul>
       </div>
 
