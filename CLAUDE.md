@@ -60,7 +60,7 @@ dependency-free Node API that owns the folder tree.
 | What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
 | What an agent's own view renders — profile, dummy heartbeat/max-children/mission, sample pulse actions, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
 | A workflow's kanban board — columns, bot/human column styling, per-card move/delete/archive controls, and the read-only card detail modal | [src/components/KanbanBoard.tsx](src/components/KanbanBoard.tsx), [src/components/Column.tsx](src/components/Column.tsx), [src/components/Card.tsx](src/components/Card.tsx), [src/components/CardMoveMenu.tsx](src/components/CardMoveMenu.tsx), [src/components/CardDetailModal.tsx](src/components/CardDetailModal.tsx) |
-| A workflow board's own data — fetch, reload, and the per-card move/delete/archive mutations | [src/hooks/useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) |
+| A workflow board's own data — fetch, quiet 60s poll, and the per-card move/delete/archive mutations (moves guarded against a stale column) | [src/hooks/useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) |
 | Rename dialog / delete confirmation | [src/components/RenameDialog.tsx](src/components/RenameDialog.tsx), [src/components/ConfirmDialog.tsx](src/components/ConfirmDialog.tsx) |
 | Pending + error state for one user action | [src/hooks/useAsyncAction.ts](src/hooks/useAsyncAction.ts) |
 | Mirroring a Set to localStorage | [src/hooks/usePersistentSet.ts](src/hooks/usePersistentSet.ts) |
@@ -165,7 +165,8 @@ stays unaware any of this is happening; it just renders whatever `nodes` and
 Only files a view claims can be opened at all — every other file row is inert. Nothing serves a project's raw bytes, so
 relative images and links inside a rendered file cannot resolve and are shown as
 unresolved rather than followed. Nothing re-reads a file that changes on disk
-under an open view. A project's details cannot be edited after the fact, and
+under an open view, except a workflow's board, which polls (see
+[useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts)). A project's details cannot be edited after the fact, and
 renaming one does not revisit what was written into it. A workflow's own
 description/columns *are* editable after creation (unlike a project) — only
 its name is fixed; the same is true of an agent's description. Opening a
@@ -249,7 +250,11 @@ its `bot` flag by `applyCardAction`, behind the narrow, type-checked
 `PATCH /api/workflow-cards` route; see
 `updateWorkflowCard` in [server/index.mjs](server/index.mjs). There is no
 endpoint that creates a card - seeding one requires editing `workflow.json`
-directly.
+directly. Before sending a move, the client separately re-fetches and refuses
+to proceed if the card has already left the column it was in when the user
+acted — a client-side guard only, since the server already independently
+re-validates the same action; see `moveUp`/`moveDown`/`moveRight` in
+[useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts).
 
 An `agent` is marked and created the same way, one level down inside a
 project's `agents` folder instead — see `scaffoldAgent` in

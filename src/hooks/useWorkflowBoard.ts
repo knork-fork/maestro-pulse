@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from '../data/api'
 import type { WorkflowCard, WorkflowColumn } from '../data/api'
 
@@ -8,6 +8,10 @@ export type WorkflowBoard = {
   cards: WorkflowCard[]
   archived: WorkflowCard[]
 }
+
+const POLL_INTERVAL_MS = 60_000
+
+const boardsEqual = (a: WorkflowBoard, b: WorkflowBoard): boolean => JSON.stringify(a) === JSON.stringify(b)
 
 /**
  * A workflow board's own data: fetch, reload, and the per-card move/delete/
@@ -24,46 +28,79 @@ export function useWorkflowBoard(path: string) {
   const [board, setBoard] = useState<WorkflowBoard | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const boardRef = useRef<WorkflowBoard | null>(null)
 
-  const reload = useCallback(async () => {
-    setLoading(true)
-    try {
-      const content = await api.fetchFile(api.workflowFilePath(path))
-      const parsed = parseWorkflowBoard(content)
-      if (!parsed) throw new Error("This workflow's board could not be read.")
-      setBoard(parsed)
-      setError(null)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setLoading(false)
-    }
-  }, [path])
+  const reload = useCallback(
+    async (quiet = false) => {
+      if (!quiet) setLoading(true)
+      try {
+        const content = await api.fetchFile(api.workflowFilePath(path))
+        const parsed = parseWorkflowBoard(content)
+        if (!parsed) throw new Error("This workflow's board could not be read.")
+        if (!quiet || !boardRef.current || !boardsEqual(boardRef.current, parsed)) {
+          boardRef.current = parsed
+          setBoard(parsed)
+        }
+        setError(null)
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      } finally {
+        if (!quiet) setLoading(false)
+      }
+    },
+    [path],
+  )
 
   useEffect(() => {
     void reload()
   }, [reload])
 
+  /** Keeps the board in sync with changes made elsewhere (another actor, a
+   *  bot column) while the view sits open — quiet, so it never flashes
+   *  "Loading…", and it only re-renders when something actually moved. */
+  useEffect(() => {
+    const id = setInterval(() => void reload(true), POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [reload])
+
+  /** Guards a move against a card that's moved out from under the user since
+   *  they saw `expectedColumn` — the server would otherwise happily validate
+   *  the action against whatever column the card is actually in now. */
+  const guardColumn = useCallback(
+    async (cardId: string, expectedColumn: string) => {
+      const content = await api.fetchFile(api.workflowFilePath(path))
+      const parsed = parseWorkflowBoard(content)
+      const card = parsed?.cards.find((entry) => entry.id === cardId)
+      if (!card || card.column !== expectedColumn) {
+        throw new Error('This card has moved — refresh and try again.')
+      }
+    },
+    [path],
+  )
+
   const moveUp = useCallback(
-    async (cardId: string) => {
+    async (cardId: string, expectedColumn: string) => {
+      await guardColumn(cardId, expectedColumn)
       await api.moveCardUp(path, cardId)
       await reload()
     },
-    [path, reload],
+    [path, reload, guardColumn],
   )
   const moveDown = useCallback(
-    async (cardId: string) => {
+    async (cardId: string, expectedColumn: string) => {
+      await guardColumn(cardId, expectedColumn)
       await api.moveCardDown(path, cardId)
       await reload()
     },
-    [path, reload],
+    [path, reload, guardColumn],
   )
   const moveRight = useCallback(
-    async (cardId: string) => {
+    async (cardId: string, expectedColumn: string) => {
+      await guardColumn(cardId, expectedColumn)
       await api.moveCardRight(path, cardId)
       await reload()
     },
-    [path, reload],
+    [path, reload, guardColumn],
   )
   const remove = useCallback(
     async (cardId: string) => {

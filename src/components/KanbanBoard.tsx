@@ -90,9 +90,9 @@ export function KanbanBoard({ path, name }: Props) {
             onOpen={setOpenCard}
             onDelete={setConfirmDelete}
             onArchive={(card) => state.archive(card.id)}
-            onMoveUp={(card) => state.moveUp(card.id)}
-            onMoveDown={(card) => state.moveDown(card.id)}
-            onMoveRight={(card) => state.moveRight(card.id)}
+            onMoveUp={(card) => state.moveUp(card.id, card.column)}
+            onMoveDown={(card) => state.moveDown(card.id, card.column)}
+            onMoveRight={(card) => state.moveRight(card.id, card.column)}
           />
         ))}
       </div>
