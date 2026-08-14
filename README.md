@@ -1,12 +1,6 @@
 # maestro-pulse
 
-Three-pane single-page app (projects sidebar / main area / sessions sidebar).
-The projects sidebar browses and edits a real folder tree on disk: create
-folders and projects, rename them, delete them.
-
-React + TypeScript + Vite, served by nginx, with a small Node API alongside it.
-Everything runs in Docker, so **nothing is installed on the host** — Docker is
-the only requirement.
+Workflow orchestrator for coordinating work between humans, automation, and disposable agents.
 
 ## Run
 
