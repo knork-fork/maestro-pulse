@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { TreeNode } from '../data/tree'
 import * as api from '../data/api'
-import type { ProjectDetails } from '../data/api'
+import type { NewWorkflowDetails, ProjectDetails, WorkflowEdits } from '../data/api'
 import { usePersistentSet } from './usePersistentSet'
 
 const EXPANDED_STORAGE_KEY = 'maestro-pulse:tree-expanded'
@@ -94,6 +94,27 @@ export function useProjectTree() {
     [load, reveal],
   )
 
+  const createWorkflow = useCallback(
+    async (parentPath: string, details: NewWorkflowDetails) => {
+      await api.createWorkflow(parentPath, details)
+      // Named in a dialog rather than in the tree, so the parent may still be
+      // shut — open it, or the workflow the user just made is nowhere to be seen.
+      reveal(parentPath)
+      await load()
+    },
+    [load, reveal],
+  )
+
+  const updateWorkflow = useCallback(
+    async (path: string, edits: WorkflowEdits) => {
+      await api.updateWorkflow(path, edits)
+      // Unlike rename, a workflow's path never changes here — its name is
+      // fixed after creation, so expansion/selection need no bookkeeping.
+      await load()
+    },
+    [load],
+  )
+
   const rename = useCallback(
     async (path: string, name: string) => {
       const next = await api.renameEntry(path, name)
@@ -128,6 +149,8 @@ export function useProjectTree() {
     reveal,
     createFolder,
     createProject,
+    createWorkflow,
+    updateWorkflow,
     rename,
     remove,
   }

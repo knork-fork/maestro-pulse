@@ -9,6 +9,7 @@ import { NewProjectDialog } from './NewProjectDialog'
 import { ProjectTree } from './ProjectTree'
 import type { Draft } from './ProjectTree'
 import { RenameDialog } from './RenameDialog'
+import { WorkflowDialog } from './WorkflowDialog'
 import { RefreshIcon } from './icons'
 
 /**
@@ -29,6 +30,9 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
   const [creatingIn, setCreatingIn] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<TreeNode | null>(null)
   const [deleting, setDeleting] = useState<TreeNode | null>(null)
+  /** The `workflows` folder a new workflow is being described for, if one is. */
+  const [creatingWorkflowIn, setCreatingWorkflowIn] = useState<string | null>(null)
+  const [editingWorkflow, setEditingWorkflow] = useState<TreeNode | null>(null)
   const [filterQuery, setFilterQuery] = useState('')
   /**
    * Paths the user has manually collapsed while a filter is active. A filter
@@ -138,6 +142,8 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
             onCancelDraft={() => setDraft(null)}
             onRequestRename={setRenaming}
             onRequestDelete={setDeleting}
+            onAddWorkflow={setCreatingWorkflowIn}
+            onEditWorkflow={setEditingWorkflow}
           />
         ) : (
           !tree.error && (
@@ -176,7 +182,7 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
       {deleting && (
         <ConfirmDialog
           title={`Delete ${deleting.name}?`}
-          // Only folders and projects can get here, and both hold things.
+          // Folders, projects and workflows can all get here, and all hold things.
           message={`"${deleting.name}" and everything inside it will be deleted from disk.`}
           confirmLabel="Delete"
           danger
@@ -185,6 +191,29 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
             setDeleting(null)
           }}
           onCancel={() => setDeleting(null)}
+        />
+      )}
+
+      {creatingWorkflowIn !== null && (
+        <WorkflowDialog
+          mode="create"
+          onCreate={async (details) => {
+            await tree.createWorkflow(creatingWorkflowIn, details)
+            setCreatingWorkflowIn(null)
+          }}
+          onCancel={() => setCreatingWorkflowIn(null)}
+        />
+      )}
+
+      {editingWorkflow && (
+        <WorkflowDialog
+          mode="edit"
+          node={editingWorkflow}
+          onSave={async (edits) => {
+            await tree.updateWorkflow(editingWorkflow.path, edits)
+            setEditingWorkflow(null)
+          }}
+          onCancel={() => setEditingWorkflow(null)}
         />
       )}
     </aside>

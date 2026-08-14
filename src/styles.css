@@ -14,6 +14,9 @@
   --danger-solid-hover: #d24f49;
   --accent: #4b6bdc;
   --accent-hover: #5a79e6;
+  /* The workflow board's own accent — distinct from --accent, and from
+     --syntax-key, which stays scoped to syntax highlighting. */
+  --workflow: #6cc4e8;
   /* A tint of --accent, so a selected row reads as chosen rather than hovered. */
   --selected: #2b3358;
   --code-bg: #17171a;
@@ -339,6 +342,11 @@ body {
   stroke: none;
 }
 
+.tree__icon--workflow {
+  fill: var(--workflow);
+  stroke: none;
+}
+
 .tree__label {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -361,6 +369,18 @@ body {
 .viewer__error {
   margin: 6px 0;
   color: var(--danger);
+}
+
+/* ---- workflow board (stub) ---- */
+
+.board-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #ededf0;
+  font-size: 1.4em;
+  font-weight: 600;
 }
 
 /* ---- rendered json ---- */
@@ -622,3 +642,76 @@ body {
   opacity: 55%;
   cursor: default;
 }
+
+/* ---- workflow columns editor ---- */
+
+.columns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.column-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+}
+
+/* Backlog, Ready and Done: shown for shape, not offered for editing. */
+.column-card--fixed {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.column-card[draggable="true"] { cursor: grab; }
+.column-card[draggable="true"]:active { cursor: grabbing; }
+
+.column-card__name { flex: 1; }
+
+.column-card__switch {
+  display: flex;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text-dim);
+}
+
+.column-card__switch span {
+  padding: 5px 8px;
+}
+
+.column-card__switch:not(.column-card__switch--bot) span:first-child,
+.column-card__switch.column-card__switch--bot span:last-child {
+  background: var(--accent);
+  color: #fff;
+}
+
+.column-card__agent { flex: none; width: 140px; }
+
+.column-card__remove {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--icon);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.column-card__remove:hover { background: var(--hover); color: var(--danger); }
+.column-card__remove:disabled { opacity: 45%; cursor: default; }

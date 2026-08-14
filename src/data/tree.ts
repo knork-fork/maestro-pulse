@@ -19,6 +19,7 @@
 export type TreeNode =
   | { type: 'folder'; name: string; path: string; children: TreeNode[] }
   | { type: 'project'; name: string; path: string; children: TreeNode[] }
+  | { type: 'workflow'; name: string; path: string; children: TreeNode[] }
   | { type: 'directory'; name: string; path: string; children: TreeNode[] }
   | { type: 'file'; name: string; path: string }
 
@@ -39,6 +40,15 @@ export const acceptsNewChildren = (node: TreeNode) => node.type === 'folder'
  */
 export const isOrganizational = (node: TreeNode) =>
   node.type === 'folder' || node.type === 'project'
+
+/**
+ * The one `directory` a project owns that isn't just content: right-clicking
+ * it offers "Add new workflow" instead of the usual create/rename/delete set.
+ * A `workflow` itself gets its own Edit/Delete menu, handled separately in
+ * `ProjectTree.tsx` rather than through `isOrganizational`.
+ */
+export const isWorkflowsFolder = (node: TreeNode, parent: TreeNode | null) =>
+  node.type === 'directory' && node.name === 'workflows' && parent?.type === 'project'
 
 /** Everything but a file holds children, so everything but a file expands. */
 export const isExpandable = (node: TreeNode) => node.type !== 'file'
@@ -75,6 +85,19 @@ export const locate = (
 
   return found ? { node: found, parent } : null
 }
+
+/**
+ * The board is not a file, so it needs a path of its own to be a `selectedPath`
+ * without one ever pointing at a real node. A leading dot makes that safe:
+ * `validName` refuses to create one, and the server skips dotfiles when
+ * building the tree, so this can never collide with something real.
+ */
+const BOARD_SUFFIX = '/.board'
+
+export const workflowBoardPath = (workflowPath: string) => `${workflowPath}${BOARD_SUFFIX}`
+
+export const parseBoardPath = (path: string): string | null =>
+  path.endsWith(BOARD_SUFFIX) ? path.slice(0, -BOARD_SUFFIX.length) : null
 
 /**
  * Keeps only the nodes that match `query` by name, or lead to one that does.

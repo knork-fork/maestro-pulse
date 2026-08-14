@@ -23,7 +23,7 @@ const ROOT = path.resolve(process.env.PROJECTS_ROOT ?? '/resources/projects')
  * Unmarked directories stay unclassified — see `directoryType`.
  */
 const TYPE_FILE = '.maestro.json'
-const CREATABLE_TYPES = ['folder', 'project']
+const CREATABLE_TYPES = ['folder', 'project', 'workflow']
 
 /**
  * What a new project is given. Unlike TYPE_FILE these are the user's own — they
@@ -32,6 +32,19 @@ const CREATABLE_TYPES = ['folder', 'project']
 const PROJECT_FILE = 'project.json'
 const README_FILE = 'README.md'
 const PROJECT_SUBDIRECTORIES = ['agents', 'workflows', 'tools']
+
+/**
+ * What a new workflow is given — a single file, since (unlike a project) a
+ * workflow has no subdirectories of its own yet. `columns` always stores the
+ * fixed leading/trailing columns alongside whatever the client added, so a
+ * later reader (including the eventual board) sees one complete ordered list
+ * without recomputing it.
+ */
+const WORKFLOW_FILE = 'workflow.json'
+const FIXED_LEADING_COLUMNS = ['Backlog', 'Ready']
+const FIXED_TRAILING_COLUMN = 'Done'
+const MAX_WORKFLOW_COLUMNS = 20
+const MAX_COLUMN_NAME_LENGTH = 60
 
 /** Bounds the recursive read against deep nesting and symlink cycles. */
 const MAX_DEPTH = 12
@@ -54,6 +67,7 @@ const routes = {
   'GET /api/tree': getTree,
   'GET /api/file': getFile,
   'POST /api/entries': createEntry,
+  'PUT /api/entries': updateEntry,
   'PATCH /api/entry': renameEntry,
   'DELETE /api/entry': deleteEntry,
 }
@@ -97,8 +111,9 @@ async function createEntry(req) {
   const type = validType(body.type)
   const name = validName(body.name)
 
-  // A project carries details a folder does not. Validating them here, before
-  // anything is written, means a bad body never leaves a directory behind.
+  // A project or a workflow carries details a folder does not. Validating them
+  // here, before anything is written, means a bad body never leaves a
+  // directory behind.
   const details =
     type === 'project'
       ? {
@@ -106,7 +121,12 @@ async function createEntry(req) {
           location: hostPath(body.location),
           description: requiredText(body.description, 'description'),
         }
-      : null
+      : type === 'workflow'
+        ? {
+            description: requiredText(body.description, 'description'),
+            columns: validColumns(body.columns),
+          }
+        : null
 
   await ensureRoot()
 
@@ -125,15 +145,48 @@ async function createEntry(req) {
 
   if (details) {
     try {
-      await scaffoldProject(abs, details)
+      if (type === 'project') await scaffoldProject(abs, details)
+      else await scaffoldWorkflow(abs, details)
     } catch (error) {
-      // Half a project is worse than none, and the directory is ours: undo it.
+      // Half a project (or workflow) is worse than none, and the directory is
+      // ours: undo it.
       await rm(abs, { recursive: true, force: true }).catch(() => {})
       throw mapFsError(error)
     }
   }
 
   return { status: 201, body: { path: join(parent, name) } }
+}
+
+/**
+ * Overwrites an existing workflow's `workflow.json`. Unlike `createEntry`,
+ * this never creates anything — it is scoped to entries this app already
+ * marked with a recognized type, so it cannot become a way to write arbitrary
+ * file content. Today only `workflow` is editable this way; every other type
+ * still has no content-editing path, matching the "not yet wired" state of
+ * projects.
+ */
+async function updateEntry(req) {
+  const body = await readJson(req)
+  const target = relativePath(body.path)
+  const type = validType(body.type)
+  const abs = path.join(ROOT, target)
+
+  if (type !== 'workflow') throw new HttpError(400, `"${type}" cannot be edited`)
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
+    throw new HttpError(404, `No such workflow: ${target}`)
+  }
+
+  await guardFs(
+    () =>
+      scaffoldWorkflow(abs, {
+        description: requiredText(body.description, 'description'),
+        columns: validColumns(body.columns),
+      }),
+    `No such workflow: ${target}`,
+  )
+
+  return { status: 200, body: { path: target } }
 }
 
 async function renameEntry(req) {
@@ -262,6 +315,25 @@ async function scaffoldProject(abs, { name, location, description }) {
   for (const child of PROJECT_SUBDIRECTORIES) await mkdir(path.join(abs, child))
 }
 
+/**
+ * Writes (or rewrites) a workflow's `workflow.json`. Used both to fill a
+ * freshly made workflow directory and, from `updateEntry`, to save edits to an
+ * existing one — the "wrap the client's columns with the fixed ones" rule
+ * lives here exactly once so create and edit can never drift apart on it.
+ */
+async function scaffoldWorkflow(abs, { description, columns }) {
+  const full = [
+    ...FIXED_LEADING_COLUMNS.map((name) => ({ name })),
+    ...columns,
+    { name: FIXED_TRAILING_COLUMN },
+  ]
+
+  await writeFile(
+    path.join(abs, WORKFLOW_FILE),
+    `${JSON.stringify({ description, columns: full }, null, 2)}\n`,
+  )
+}
+
 // ---- validation ----
 
 function relativePath(input, { allowRoot = false } = {}) {
@@ -333,6 +405,39 @@ function hostPath(input) {
   if (!value.startsWith('/')) throw new HttpError(400, 'The location must be an absolute path')
 
   return value
+}
+
+/**
+ * The client's custom columns only — the fixed leading/trailing ones are never
+ * sent over the wire, since `scaffoldWorkflow` adds them unconditionally.
+ */
+function validColumns(input) {
+  if (!Array.isArray(input)) throw new HttpError(400, '"columns" must be an array')
+  if (input.length > MAX_WORKFLOW_COLUMNS) {
+    throw new HttpError(400, `A workflow can have at most ${MAX_WORKFLOW_COLUMNS} columns`)
+  }
+
+  return input.map(validColumn)
+}
+
+function validColumn(entry) {
+  const name = requiredText(entry?.name, 'column name')
+  if (name.length > MAX_COLUMN_NAME_LENGTH) throw new HttpError(400, 'That column name is too long')
+
+  const actor = entry?.actor
+  if (actor !== 'bot' && actor !== 'human') {
+    throw new HttpError(400, '"actor" must be "bot" or "human"')
+  }
+
+  const agent = entry?.agent ?? null
+  if (actor === 'human' && agent !== null) {
+    throw new HttpError(400, 'A human column cannot have an agent')
+  }
+  if (actor === 'bot' && agent !== null && typeof agent !== 'string') {
+    throw new HttpError(400, '"agent" must be a string or null')
+  }
+
+  return { name, actor, agent }
 }
 
 function requiredText(input, field) {

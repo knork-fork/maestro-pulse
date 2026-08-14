@@ -1,5 +1,5 @@
 import type { TreeNode } from '../data/tree'
-import { locate } from '../data/tree'
+import { locate, parseBoardPath } from '../data/tree'
 import { useFileContent } from '../hooks/useFileContent'
 import type { FileContext, FileView } from '../views/registry'
 import { fileContext, viewFor } from '../views/registry'
@@ -18,6 +18,24 @@ type Props = {
  * to the empty state, and no one has to remember to clear anything.
  */
 export function MainPane({ nodes, selectedPath }: Props) {
+  // The board is not a file, so it is checked for before `locate` even runs
+  // against the file-view machinery below — see `workflowBoardPath` in
+  // ../data/tree.
+  const boardPath = selectedPath === null ? null : parseBoardPath(selectedPath)
+  if (boardPath !== null) {
+    const board = locate(nodes, boardPath)
+    if (board && board.node.type === 'workflow') {
+      return (
+        <main className="main">
+          <div className="board-placeholder">{board.node.name}</div>
+        </main>
+      )
+    }
+    // A stale board path (the workflow was deleted) is as harmless as a stale
+    // file path — just nothing to show.
+    return <main className="main" />
+  }
+
   const found = selectedPath === null ? null : locate(nodes, selectedPath)
   const context = found && fileContext(found.node, found.parent)
   const view = context && viewFor(context)

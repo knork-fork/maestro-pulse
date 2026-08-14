@@ -56,6 +56,7 @@ dependency-free Node API that owns the folder tree.
 | Menu positioning, portalling and dismissal (shared by both) | [src/components/Menu.tsx](src/components/Menu.tsx) |
 | Dialog shell | [src/components/Modal.tsx](src/components/Modal.tsx) |
 | What a new project is asked for | [src/components/NewProjectDialog.tsx](src/components/NewProjectDialog.tsx) |
+| What a workflow is created/edited with, columns included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
 | Rename dialog / delete confirmation | [src/components/RenameDialog.tsx](src/components/RenameDialog.tsx), [src/components/ConfirmDialog.tsx](src/components/ConfirmDialog.tsx) |
 | Pending + error state for one user action | [src/hooks/useAsyncAction.ts](src/hooks/useAsyncAction.ts) |
 | Mirroring a Set to localStorage | [src/hooks/usePersistentSet.ts](src/hooks/usePersistentSet.ts) |
@@ -160,17 +161,21 @@ Only files a view claims can be opened at all — every other file row is inert.
 relative images and links inside a rendered file cannot resolve and are shown as
 unresolved rather than followed. Nothing re-reads a file that changes on disk
 under an open view. A project's details cannot be edited after the fact, and
-renaming one does not revisit what was written into it.
+renaming one does not revisit what was written into it. A workflow's own
+description/columns *are* editable after creation (unlike a project) — only
+its name is fixed. Opening a workflow's board shows only its name; there is no
+kanban rendering yet, and the agent dropdown has no agents to offer, since
+nothing yet registers what an "agent" is.
 
 ## Data shape
 
 `TreeNode`, defined and exported by [src/data/tree.ts](src/data/tree.ts), is the
 discriminated union the tree renders and the API produces. Its variants are
 split at the project boundary — organizational `folder`s above it, a `project`
-marking it, and `directory`/`file` for contents. Every variant carries a `name`
-and a `path`; all but `file` carry `children: TreeNode[]`. That file also owns
-the predicates the UI branches on, so the rule lives with the type rather than in
-components.
+marking it, a `workflow` inside one, and `directory`/`file` for everything else.
+Every variant carries a `name` and a `path`; all but `file` carry
+`children: TreeNode[]`. That file also owns the predicates the UI branches on,
+so the rule lives with the type rather than in components.
 
 `path` is relative to the projects root and slash-joined, and is a node's
 identity on both sides of the wire: it is what expansion is keyed by and what
@@ -190,6 +195,19 @@ Scaffolding is the API's job, not the client's, so what a project *is* has one
 answer on the side that owns the filesystem; see `scaffoldProject`. Unlike the
 marker, what it writes is ordinary content: visible in the tree, and the user's
 to edit afterwards.
+
+A `workflow` is marked the same way a `project` is, one level down: right-clicking
+a project's `workflows` folder is how one is created, and the fixed leading/
+trailing columns (Backlog, Ready, … Done) a board always has are added by the
+API rather than sent by the client — see `scaffoldWorkflow` and `validColumns`
+in [server/index.mjs](server/index.mjs). Unlike a project, a workflow's own
+content (`workflow.json`) can be overwritten after creation, through the same
+type-checked entry point that creates it; see `updateEntry`. Its name cannot —
+see [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx). Opening a
+workflow's board is a synthetic selection, not a real file — see
+`workflowBoardPath`/`parseBoardPath` in [tree.ts](src/data/tree.ts) and where
+[MainPane.tsx](src/components/MainPane.tsx) checks for it before falling
+through to the file-view logic below.
 
 A file's contents cross the wire as text wrapped in JSON, because the API has no
 non-JSON response path. The read is capped and refuses anything that is not a

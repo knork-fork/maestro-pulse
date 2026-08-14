@@ -2,11 +2,18 @@ import { createContext, useContext, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import type { BranchNode, CreatableType, TreeNode } from '../data/tree'
 import { ROOT_PATH } from '../data/api'
-import { acceptsNewChildren, childrenOf, isExpandable, isOrganizational } from '../data/tree'
+import {
+  acceptsNewChildren,
+  childrenOf,
+  isExpandable,
+  isOrganizational,
+  isWorkflowsFolder,
+  workflowBoardPath,
+} from '../data/tree'
 import { useAsyncAction } from '../hooks/useAsyncAction'
 import { fileContext, viewFor } from '../views/registry'
 import { classes } from './classes'
-import { ChevronIcon, FileIcon, FolderIcon } from './icons'
+import { ChevronIcon, FileIcon, FolderIcon, WorkflowIcon } from './icons'
 import { Menu, anchorFromPoint } from './Menu'
 import type { MenuAnchor, MenuItem } from './Menu'
 import { NewMenu, createItems } from './NewMenu'
@@ -32,6 +39,10 @@ type Actions = {
   onCancelDraft: () => void
   onRequestRename: (node: TreeNode) => void
   onRequestDelete: (node: TreeNode) => void
+  /** Asks for a new workflow inside a project's `workflows` folder. */
+  onAddWorkflow: (parentPath: string) => void
+  /** Opens the workflow modal filled with an existing workflow's data. */
+  onEditWorkflow: (node: TreeNode) => void
 }
 
 type Props = Actions & {
@@ -42,12 +53,14 @@ type Props = Actions & {
 }
 
 export function ProjectTree({ nodes, expanded, selectedPath, draft, ...actions }: Props) {
-  const [menu, setMenu] = useState<{ node: TreeNode; anchor: MenuAnchor } | null>(null)
+  const [menu, setMenu] = useState<{ node: TreeNode; parent: BranchNode | null; anchor: MenuAnchor } | null>(
+    null,
+  )
 
-  const openMenu = (node: TreeNode, event: MouseEvent) => {
+  const openMenu = (node: TreeNode, parent: BranchNode | null, event: MouseEvent) => {
     // The tree's own menu stands in for the browser's.
     event.preventDefault()
-    setMenu({ node, anchor: anchorFromPoint(event.clientX, event.clientY) })
+    setMenu({ node, parent, anchor: anchorFromPoint(event.clientX, event.clientY) })
   }
 
   return (
@@ -66,7 +79,7 @@ export function ProjectTree({ nodes, expanded, selectedPath, draft, ...actions }
       {menu && (
         <Menu
           anchor={menu.anchor}
-          items={menuItems(menu.node, actions)}
+          items={menuItems(menu.node, menu.parent, actions)}
           onDismiss={() => setMenu(null)}
         />
       )}
@@ -81,8 +94,24 @@ export function ProjectTree({ nodes, expanded, selectedPath, draft, ...actions }
  * What that leaves enabled is the difference between the organization and its
  * contents: only a `folder` takes new children, and only a `folder` or a `project`
  * is ours to rename or delete. What is inside a project is the user's own.
+ *
+ * Two node shapes get a menu of their own instead, short-circuited before any
+ * of that: a project's `workflows` folder only offers "Add new workflow", and
+ * a `workflow` only offers Edit/Delete — both a different shape entirely, not
+ * this one with items merely disabled.
  */
-const menuItems = (node: TreeNode, actions: Actions): MenuItem[] => {
+const menuItems = (node: TreeNode, parent: BranchNode | null, actions: Actions): MenuItem[] => {
+  if (isWorkflowsFolder(node, parent)) {
+    return [{ label: 'Add new workflow', onSelect: () => actions.onAddWorkflow(node.path) }]
+  }
+
+  if (node.type === 'workflow') {
+    return [
+      { label: 'Edit', onSelect: () => actions.onEditWorkflow(node) },
+      { label: 'Delete', danger: true, onSelect: () => actions.onRequestDelete(node) },
+    ]
+  }
+
   const editable = isOrganizational(node)
 
   return [
@@ -117,6 +146,7 @@ function TreeList({ nodes, parent, depth, role }: ListProps) {
 
   return (
     <ul className="tree__list" role={role}>
+      {parent && parent.type === 'workflow' && <BoardItem workflow={parent} depth={depth} />}
       {nodes.map((node) => (
         <TreeItem key={node.path} node={node} parent={parent} depth={depth} />
       ))}
@@ -155,7 +185,7 @@ function TreeItem({ node, parent, depth }: ItemProps) {
           selected && 'tree__row--selected',
         ])}
         style={indentAt(depth)}
-        onContextMenu={(event) => openMenu(node, event)}
+        onContextMenu={(event) => openMenu(node, parent, event)}
       >
         <button
           type="button"
@@ -244,6 +274,38 @@ function DraftItem({ depth }: { depth: number }) {
   )
 }
 
+/**
+ * The one row a workflow folder gets that isn't backed by anything on disk —
+ * opening it shows the workflow's board (for now, just its name). Right-clicking
+ * it hands the *real* workflow node to `openMenu`, the same one the folder row
+ * itself would, so either row produces the identical Edit/Delete menu.
+ */
+function BoardItem({ workflow, depth }: { workflow: Extract<TreeNode, { type: 'workflow' }>; depth: number }) {
+  const { selectedPath, activePath, onSelect, openMenu } = useTreeContext()
+  const boardPath = workflowBoardPath(workflow.path)
+  const selected = selectedPath === boardPath
+
+  return (
+    <li role="treeitem" aria-selected={selected}>
+      <div
+        className={classes([
+          'tree__row',
+          activePath === workflow.path && 'tree__row--active',
+          selected && 'tree__row--selected',
+        ])}
+        style={indentAt(depth)}
+        onContextMenu={(event) => openMenu(workflow, null, event)}
+      >
+        <button type="button" className="tree__toggle" onClick={() => onSelect(boardPath)}>
+          <span className="tree__chevron tree__chevron--placeholder" />
+          <WorkflowIcon className="tree__icon tree__icon--workflow" />
+          <span className="tree__label">{workflow.name}</span>
+        </button>
+      </div>
+    </li>
+  )
+}
+
 function Glyphs({ node, open }: { node: TreeNode; open: boolean }) {
   return (
     <>
@@ -272,7 +334,7 @@ type TreeContextValue = Actions & {
   draft: Draft | null
   /** The row whose context menu is open, kept highlighted while it is. */
   activePath: string | null
-  openMenu: (node: TreeNode, event: MouseEvent) => void
+  openMenu: (node: TreeNode, parent: BranchNode | null, event: MouseEvent) => void
 }
 
 /** Rows are recursive and all read the same state, so it is not threaded down. */
