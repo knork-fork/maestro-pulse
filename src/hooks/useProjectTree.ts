@@ -3,8 +3,10 @@ import type { TreeNode } from '../data/tree'
 import * as api from '../data/api'
 import type { AgentEdits, NewAgentDetails, NewWorkflowDetails, ProjectDetails, WorkflowEdits } from '../data/api'
 import { usePersistentSet } from './usePersistentSet'
+import { usePersistentPath } from './usePersistentPath'
 
 const EXPANDED_STORAGE_KEY = 'maestro-pulse:tree-expanded'
+const SELECTED_STORAGE_KEY = 'maestro-pulse:tree-selected'
 
 /**
  * Owns the tree both panes read: the nodes from the API, which rows are expanded,
@@ -28,11 +30,8 @@ const EXPANDED_STORAGE_KEY = 'maestro-pulse:tree-expanded'
 export function useProjectTree() {
   const [nodes, setNodes] = useState<TreeNode[]>([])
   const [expanded, setExpanded] = usePersistentSet(EXPANDED_STORAGE_KEY)
-  /**
-   * Deliberately not persisted: reopening the app onto a file the user did not
-   * ask for is worse than reopening onto nothing.
-   */
-  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  /** Persisted the same way expansion is, so a refresh reopens what was open. */
+  const [selectedPath, setSelectedPath] = usePersistentPath(SELECTED_STORAGE_KEY)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   /** Distinguishes "nothing read yet" from "nothing there", for the empty state. */

@@ -109,9 +109,13 @@ mutations; every mutation re-reads the whole tree afterwards, because the
 filesystem is the source of truth and can change without us. Expansion and the
 selection are both adjusted alongside renames and deletes there, so reloading —
 including the refresh button — never collapses what the user had open or blanks
-the file they were reading. Expansion alone is persisted, by
-[usePersistentSet.ts](src/hooks/usePersistentSet.ts), which owns the storage
-key's serialized form while its caller declares the key.
+the file they were reading. Both expansion and the selected path are persisted
+— by [usePersistentSet.ts](src/hooks/usePersistentSet.ts) and
+[usePersistentPath.ts](src/hooks/usePersistentPath.ts) respectively, each
+owning its storage key's serialized form while its caller (`useProjectTree.ts`)
+declares the key — so a page refresh reopens whatever was last selected
+instead of the empty pane; a persisted path that no longer resolves falls back
+to the empty state the same as any other stale selection.
 
 The hook is called in [App.tsx](src/App.tsx) rather than in a pane, because two
 panes read it: the sidebar browses and mutates the tree, and the main pane shows
@@ -277,7 +281,9 @@ Which files are worth reading is the client's call, not the endpoint's — see
 `viewFor` in [src/views/registry.ts](src/views/registry.ts).
 
 Persisted to `localStorage`: a JSON `string[]` of expanded tree paths, written
-and re-validated by [usePersistentSet.ts](src/hooks/usePersistentSet.ts).
+and re-validated by [usePersistentSet.ts](src/hooks/usePersistentSet.ts); and
+the selected path itself, written and re-validated the same way by
+[usePersistentPath.ts](src/hooks/usePersistentPath.ts).
 
 ## Run / apply changes / verify
 
