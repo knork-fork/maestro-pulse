@@ -69,6 +69,7 @@ dependency-free Node API that owns the folder tree.
 | All styling — theme tokens, pane grid, tree, controls, dialogs, rendered markdown | [src/styles.css](src/styles.css) |
 | Keeping the project store out of git | [resources/.gitignore](resources/.gitignore) |
 | Build tooling + dependencies | [package.json](package.json), [vite.config.ts](vite.config.ts), [tsconfig.json](tsconfig.json) |
+| CI check (typecheck) | [scripts/ci.sh](scripts/ci.sh) |
 | Three-stage image (SPA build → api → nginx serve) | [Dockerfile](Dockerfile) |
 | nginx server, listen port, and the API proxy | [nginx.conf](nginx.conf) |
 | Both services, host port, and the store's bind mount | [docker-compose.yml](docker-compose.yml) |
@@ -271,13 +272,14 @@ and re-validated by [usePersistentSet.ts](src/hooks/usePersistentSet.ts).
 
 > [!IMPORTANT]
 > **Do not try to exercise the UI yourself** — no browser drivers, no scripted
-> clicking, no hunting for a headless browser. The user tests the app manually.
+> clicking, no hunting for a headless browser, no `curl`ing the running app.
+> The user tests the app manually.
 >
-> Your side of "verify" is: type check, rebuild, confirm the containers are up,
-> and — where a change has a backend half — `curl` the API. Then **hand the user
-> a short list of what to click and what they should see**, ordered so each step
-> builds on the last, and stop there. Say plainly which parts you could not check
-> yourself.
+> Your side of "verify" is: rebuild via `docker-compose` and confirm the
+> containers are up. Type checking runs in CI, not as an ad-hoc local command.
+> Then **hand the user a short list of what to click and what they should
+> see**, ordered so each step builds on the last, and stop there. Say plainly
+> which parts you could not check yourself.
 
 The SPA is compiled into the image, so **any frontend edit requires a rebuild** —
 restarting the container alone serves the previous bundle. The api service is
@@ -285,15 +287,18 @@ plain `node` with no build step, but still needs its container recreated to pick
 up a change.
 
 ```bash
-docker compose up -d --build       # start, and apply any change
-curl -sI http://localhost:20444/   # verify the app (expect 200)
-curl -s http://localhost:20444/api/tree   # verify the API through nginx
-docker compose logs web api        # nginx access/error logs, API request log
-docker compose down                # stop
+docker-compose up -d --build       # start, and apply any change
+docker-compose ps                  # confirm both services are up
+docker-compose logs web api        # nginx access/error logs, API request log
+docker-compose down                # stop
+```
 
-# type check (the image build does NOT type-check — vite only transpiles)
-docker build --target build -t maestro-pulse-build . && \
-  docker run --rm maestro-pulse-build npm run typecheck
+Type checking (the image build does NOT type-check, vite only transpiles) is
+one command, not reassembled each session: [scripts/ci.sh](scripts/ci.sh)
+builds the `build` stage and runs `npm run typecheck` inside it.
+
+```bash
+./scripts/ci.sh
 ```
 
 The app is at `http://localhost:20444`. If folders end up owned by the wrong
