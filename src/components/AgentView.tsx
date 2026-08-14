@@ -21,6 +21,24 @@ const PULSE_ACTIONS = [
 
 const DEFAULT_HEARTBEAT = 15
 const DEFAULT_MAX_CHILDREN = 4
+const DEFAULT_HANDHOLDING = 50
+const DEFAULT_VERBOSITY = 50
+
+const HANDHOLDING_DESCRIPTIONS: Record<number, string> = {
+  0: 'Agent decides everything itself.',
+  25: 'Escalate architecture/design decisions only.',
+  50: 'Escalate significant ambiguity and tradeoffs.',
+  75: 'Ask on most non-trivial decisions.',
+  100: 'Ask whenever there is meaningful ambiguity.',
+}
+
+const VERBOSITY_DESCRIPTIONS: Record<number, string> = {
+  0: 'Caveman',
+  25: 'Concise',
+  50: 'Normal',
+  75: 'Detailed',
+  100: 'Scholar',
+}
 
 type Props = { path: string; name: string }
 
@@ -86,6 +104,8 @@ function parseAgentFile(content: string): { description: string } | null {
 function BasicInfoCard({ name, description }: { name: string; description: string }) {
   const [heartbeat, setHeartbeat] = useState(DEFAULT_HEARTBEAT)
   const [maxChildren, setMaxChildren] = useState(DEFAULT_MAX_CHILDREN)
+  const [handholding, setHandholding] = useState(DEFAULT_HANDHOLDING)
+  const [verbosity, setVerbosity] = useState(DEFAULT_VERBOSITY)
 
   return (
     <div className="agent-view__card">
@@ -121,6 +141,42 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
               value={maxChildren}
               onChange={setMaxChildren}
             />
+          </div>
+
+          <div className="modal__field">
+            <label className="modal__label" htmlFor="agent-view-handholding">
+              Handholding
+            </label>
+            <RangeField
+              id="agent-view-handholding"
+              min={0}
+              max={100}
+              step={25}
+              unit="%"
+              value={handholding}
+              onChange={setHandholding}
+            />
+            <p className="agent-view__range-hint">
+              ({HANDHOLDING_DESCRIPTIONS[handholding]})
+            </p>
+          </div>
+
+          <div className="modal__field">
+            <label className="modal__label" htmlFor="agent-view-verbosity">
+              Verbosity
+            </label>
+            <RangeField
+              id="agent-view-verbosity"
+              min={0}
+              max={100}
+              step={25}
+              unit="%"
+              value={verbosity}
+              onChange={setVerbosity}
+            />
+            <p className="agent-view__range-hint">
+              ({VERBOSITY_DESCRIPTIONS[verbosity]})
+            </p>
           </div>
         </div>
 

@@ -735,6 +735,13 @@ body {
   font-size: 12px;
 }
 
+.agent-view__range-hint {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .agent-view__pulse-list {
   display: flex;
   flex-direction: column;
