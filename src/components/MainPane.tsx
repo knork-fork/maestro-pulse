@@ -1,5 +1,5 @@
 import type { TreeNode } from '../data/tree'
-import { locate, parseBoardPath } from '../data/tree'
+import { locate, parseAgentViewPath, parseBoardPath } from '../data/tree'
 import { useFileContent } from '../hooks/useFileContent'
 import type { FileContext, FileView } from '../views/registry'
 import { fileContext, viewFor } from '../views/registry'
@@ -33,6 +33,23 @@ export function MainPane({ nodes, selectedPath }: Props) {
     }
     // A stale board path (the workflow was deleted) is as harmless as a stale
     // file path — just nothing to show.
+    return <main className="main" />
+  }
+
+  // Same trick for an agent's own (currently stub) view — see
+  // `agentViewPath` in ../data/tree.
+  const agentViewSourcePath = selectedPath === null ? null : parseAgentViewPath(selectedPath)
+  if (agentViewSourcePath !== null) {
+    const found = locate(nodes, agentViewSourcePath)
+    if (found && found.node.type === 'agent') {
+      return (
+        <main className="main">
+          <div className="agent-placeholder">{found.node.name}</div>
+        </main>
+      )
+    }
+    // A stale agent path (the agent was deleted) is as harmless as a stale
+    // board or file path — just nothing to show.
     return <main className="main" />
   }
 

@@ -4,7 +4,9 @@ import type { BranchNode, CreatableType, TreeNode } from '../data/tree'
 import { ROOT_PATH } from '../data/api'
 import {
   acceptsNewChildren,
+  agentViewPath,
   childrenOf,
+  isAgentsFolder,
   isExpandable,
   isOrganizational,
   isWorkflowsFolder,
@@ -13,7 +15,7 @@ import {
 import { useAsyncAction } from '../hooks/useAsyncAction'
 import { fileContext, viewFor } from '../views/registry'
 import { classes } from './classes'
-import { ChevronIcon, FileIcon, FolderIcon, WorkflowIcon } from './icons'
+import { AgentIcon, ChevronIcon, FileIcon, FolderIcon, WorkflowIcon } from './icons'
 import { Menu, anchorFromPoint } from './Menu'
 import type { MenuAnchor, MenuItem } from './Menu'
 import { NewMenu, createItems } from './NewMenu'
@@ -43,6 +45,10 @@ type Actions = {
   onAddWorkflow: (parentPath: string) => void
   /** Opens the workflow modal filled with an existing workflow's data. */
   onEditWorkflow: (node: TreeNode) => void
+  /** Asks for a new agent inside a project's `agents` folder. */
+  onAddAgent: (parentPath: string) => void
+  /** Opens the agent modal filled with an existing agent's data. */
+  onEditAgent: (node: TreeNode) => void
 }
 
 type Props = Actions & {
@@ -95,10 +101,10 @@ export function ProjectTree({ nodes, expanded, selectedPath, draft, ...actions }
  * contents: only a `folder` takes new children, and only a `folder` or a `project`
  * is ours to rename or delete. What is inside a project is the user's own.
  *
- * Two node shapes get a menu of their own instead, short-circuited before any
- * of that: a project's `workflows` folder only offers "Add new workflow", and
- * a `workflow` only offers Edit/Delete — both a different shape entirely, not
- * this one with items merely disabled.
+ * Four node shapes get a menu of their own instead, short-circuited before any
+ * of that: a project's `workflows`/`agents` folder only offers "Add new
+ * workflow"/"Add new agent", and a `workflow`/`agent` only offers Edit/Delete
+ * — all a different shape entirely, not this one with items merely disabled.
  */
 const menuItems = (node: TreeNode, parent: BranchNode | null, actions: Actions): MenuItem[] => {
   if (isWorkflowsFolder(node, parent)) {
@@ -108,6 +114,17 @@ const menuItems = (node: TreeNode, parent: BranchNode | null, actions: Actions):
   if (node.type === 'workflow') {
     return [
       { label: 'Edit', onSelect: () => actions.onEditWorkflow(node) },
+      { label: 'Delete', danger: true, onSelect: () => actions.onRequestDelete(node) },
+    ]
+  }
+
+  if (isAgentsFolder(node, parent)) {
+    return [{ label: 'Add new agent', onSelect: () => actions.onAddAgent(node.path) }]
+  }
+
+  if (node.type === 'agent') {
+    return [
+      { label: 'Edit', onSelect: () => actions.onEditAgent(node) },
       { label: 'Delete', danger: true, onSelect: () => actions.onRequestDelete(node) },
     ]
   }
@@ -147,6 +164,7 @@ function TreeList({ nodes, parent, depth, role }: ListProps) {
   return (
     <ul className="tree__list" role={role}>
       {parent && parent.type === 'workflow' && <BoardItem workflow={parent} depth={depth} />}
+      {parent && parent.type === 'agent' && <AgentItem agent={parent} depth={depth} />}
       {nodes.map((node) => (
         <TreeItem key={node.path} node={node} parent={parent} depth={depth} />
       ))}
@@ -300,6 +318,39 @@ function BoardItem({ workflow, depth }: { workflow: Extract<TreeNode, { type: 'w
           <span className="tree__chevron tree__chevron--placeholder" />
           <WorkflowIcon className="tree__icon tree__icon--workflow" />
           <span className="tree__label">{workflow.name}</span>
+        </button>
+      </div>
+    </li>
+  )
+}
+
+/**
+ * The one row an agent folder gets that isn't backed by anything on disk —
+ * opening it shows the agent's own view (for now, just its name). Right-
+ * clicking it hands the *real* agent node to `openMenu`, the same one the
+ * folder row itself would, so either row produces the identical Edit/Delete
+ * menu.
+ */
+function AgentItem({ agent, depth }: { agent: Extract<TreeNode, { type: 'agent' }>; depth: number }) {
+  const { selectedPath, activePath, onSelect, openMenu } = useTreeContext()
+  const viewPath = agentViewPath(agent.path)
+  const selected = selectedPath === viewPath
+
+  return (
+    <li role="treeitem" aria-selected={selected}>
+      <div
+        className={classes([
+          'tree__row',
+          activePath === agent.path && 'tree__row--active',
+          selected && 'tree__row--selected',
+        ])}
+        style={indentAt(depth)}
+        onContextMenu={(event) => openMenu(agent, null, event)}
+      >
+        <button type="button" className="tree__toggle" onClick={() => onSelect(viewPath)}>
+          <span className="tree__chevron tree__chevron--placeholder" />
+          <AgentIcon className="tree__icon tree__icon--agent" />
+          <span className="tree__label">{agent.name}</span>
         </button>
       </div>
     </li>

@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react'
 import { ROOT_PATH } from '../data/api'
 import type { CreatableType, TreeNode } from '../data/tree'
-import { expandablePaths, filterTree } from '../data/tree'
+import { expandablePaths, filterTree, locate } from '../data/tree'
 import type { ProjectTreeState } from '../hooks/useProjectTree'
+import { AgentDialog } from './AgentDialog'
 import { ConfirmDialog } from './ConfirmDialog'
 import { NewMenu } from './NewMenu'
 import { NewProjectDialog } from './NewProjectDialog'
 import { ProjectTree } from './ProjectTree'
 import type { Draft } from './ProjectTree'
 import { RenameDialog } from './RenameDialog'
+import type { AvailableAgent } from './WorkflowDialog'
 import { WorkflowDialog } from './WorkflowDialog'
 import { RefreshIcon } from './icons'
 
@@ -33,6 +35,9 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
   /** The `workflows` folder a new workflow is being described for, if one is. */
   const [creatingWorkflowIn, setCreatingWorkflowIn] = useState<string | null>(null)
   const [editingWorkflow, setEditingWorkflow] = useState<TreeNode | null>(null)
+  /** The `agents` folder a new agent is being described for, if one is. */
+  const [creatingAgentIn, setCreatingAgentIn] = useState<string | null>(null)
+  const [editingAgent, setEditingAgent] = useState<TreeNode | null>(null)
   const [filterQuery, setFilterQuery] = useState('')
   /**
    * Paths the user has manually collapsed while a filter is active. A filter
@@ -96,6 +101,21 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
     setDraft((current) => (current === committed ? null : current))
   }
 
+  /**
+   * The agents a workflow's bot columns may be assigned to, scoped to the
+   * project that owns `workflowsFolderPath` (its `agents` sibling folder) —
+   * not every agent in the whole tree.
+   */
+  const agentsFor = (workflowsFolderPath: string): AvailableAgent[] => {
+    const projectPath = workflowsFolderPath.split('/').slice(0, -1).join('/')
+    const found = locate(tree.nodes, `${projectPath}/agents`)
+    if (!found || found.node.type === 'file') return []
+
+    return found.node.children
+      .filter((child): child is Extract<TreeNode, { type: 'agent' }> => child.type === 'agent')
+      .map((agent) => ({ name: agent.name, path: agent.path }))
+  }
+
   return (
     <aside className="sidebar sidebar--left">
       <header className="sidebar__header">
@@ -144,6 +164,8 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
             onRequestDelete={setDeleting}
             onAddWorkflow={setCreatingWorkflowIn}
             onEditWorkflow={setEditingWorkflow}
+            onAddAgent={setCreatingAgentIn}
+            onEditAgent={setEditingAgent}
           />
         ) : (
           !tree.error && (
@@ -197,6 +219,7 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
       {creatingWorkflowIn !== null && (
         <WorkflowDialog
           mode="create"
+          availableAgents={agentsFor(creatingWorkflowIn)}
           onCreate={async (details) => {
             await tree.createWorkflow(creatingWorkflowIn, details)
             setCreatingWorkflowIn(null)
@@ -209,11 +232,35 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
         <WorkflowDialog
           mode="edit"
           node={editingWorkflow}
+          availableAgents={agentsFor(editingWorkflow.path.split('/').slice(0, -1).join('/'))}
           onSave={async (edits) => {
             await tree.updateWorkflow(editingWorkflow.path, edits)
             setEditingWorkflow(null)
           }}
           onCancel={() => setEditingWorkflow(null)}
+        />
+      )}
+
+      {creatingAgentIn !== null && (
+        <AgentDialog
+          mode="create"
+          onCreate={async (details) => {
+            await tree.createAgent(creatingAgentIn, details)
+            setCreatingAgentIn(null)
+          }}
+          onCancel={() => setCreatingAgentIn(null)}
+        />
+      )}
+
+      {editingAgent && (
+        <AgentDialog
+          mode="edit"
+          node={editingAgent}
+          onSave={async (edits) => {
+            await tree.updateAgent(editingAgent.path, edits)
+            setEditingAgent(null)
+          }}
+          onCancel={() => setEditingAgent(null)}
         />
       )}
     </aside>

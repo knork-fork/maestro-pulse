@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { TreeNode } from '../data/tree'
 import * as api from '../data/api'
-import type { NewWorkflowDetails, ProjectDetails, WorkflowEdits } from '../data/api'
+import type { AgentEdits, NewAgentDetails, NewWorkflowDetails, ProjectDetails, WorkflowEdits } from '../data/api'
 import { usePersistentSet } from './usePersistentSet'
 
 const EXPANDED_STORAGE_KEY = 'maestro-pulse:tree-expanded'
@@ -115,6 +115,27 @@ export function useProjectTree() {
     [load],
   )
 
+  const createAgent = useCallback(
+    async (parentPath: string, details: NewAgentDetails) => {
+      await api.createAgent(parentPath, details)
+      // Named in a dialog rather than in the tree, so the parent may still be
+      // shut — open it, or the agent the user just made is nowhere to be seen.
+      reveal(parentPath)
+      await load()
+    },
+    [load, reveal],
+  )
+
+  const updateAgent = useCallback(
+    async (path: string, edits: AgentEdits) => {
+      await api.updateAgent(path, edits)
+      // Unlike rename, an agent's path never changes here — its name is
+      // fixed after creation, so expansion/selection need no bookkeeping.
+      await load()
+    },
+    [load],
+  )
+
   const rename = useCallback(
     async (path: string, name: string) => {
       const next = await api.renameEntry(path, name)
@@ -151,6 +172,8 @@ export function useProjectTree() {
     createProject,
     createWorkflow,
     updateWorkflow,
+    createAgent,
+    updateAgent,
     rename,
     remove,
   }

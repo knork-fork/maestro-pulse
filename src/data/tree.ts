@@ -20,6 +20,7 @@ export type TreeNode =
   | { type: 'folder'; name: string; path: string; children: TreeNode[] }
   | { type: 'project'; name: string; path: string; children: TreeNode[] }
   | { type: 'workflow'; name: string; path: string; children: TreeNode[] }
+  | { type: 'agent'; name: string; path: string; children: TreeNode[] }
   | { type: 'directory'; name: string; path: string; children: TreeNode[] }
   | { type: 'file'; name: string; path: string }
 
@@ -49,6 +50,15 @@ export const isOrganizational = (node: TreeNode) =>
  */
 export const isWorkflowsFolder = (node: TreeNode, parent: TreeNode | null) =>
   node.type === 'directory' && node.name === 'workflows' && parent?.type === 'project'
+
+/**
+ * The one `directory` a project owns that isn't just content: right-clicking
+ * it offers "Add new agent" instead of the usual create/rename/delete set.
+ * An `agent` itself gets its own Edit/Delete menu, handled separately in
+ * `ProjectTree.tsx` rather than through `isOrganizational`.
+ */
+export const isAgentsFolder = (node: TreeNode, parent: TreeNode | null) =>
+  node.type === 'directory' && node.name === 'agents' && parent?.type === 'project'
 
 /** Everything but a file holds children, so everything but a file expands. */
 export const isExpandable = (node: TreeNode) => node.type !== 'file'
@@ -98,6 +108,14 @@ export const workflowBoardPath = (workflowPath: string) => `${workflowPath}${BOA
 
 export const parseBoardPath = (path: string): string | null =>
   path.endsWith(BOARD_SUFFIX) ? path.slice(0, -BOARD_SUFFIX.length) : null
+
+/** Same trick as `BOARD_SUFFIX`, for an agent's own (currently stub) view. */
+const AGENT_VIEW_SUFFIX = '/.agent'
+
+export const agentViewPath = (agentPath: string) => `${agentPath}${AGENT_VIEW_SUFFIX}`
+
+export const parseAgentViewPath = (path: string): string | null =>
+  path.endsWith(AGENT_VIEW_SUFFIX) ? path.slice(0, -AGENT_VIEW_SUFFIX.length) : null
 
 /**
  * Keeps only the nodes that match `query` by name, or lead to one that does.

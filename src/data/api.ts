@@ -36,6 +36,16 @@ export type WorkflowEdits = {
   columns: CustomWorkflowColumn[]
 }
 
+export type NewAgentDetails = {
+  name: string
+  description: string
+}
+
+/** What editing an agent can change. Its name is fixed after creation. */
+export type AgentEdits = {
+  description: string
+}
+
 export const fetchTree = () =>
   request<{ nodes: TreeNode[] }>('GET', '/tree').then((body) => body.nodes)
 
@@ -74,6 +84,23 @@ export const updateWorkflow = (path: string, edits: WorkflowEdits) =>
 /** Where a workflow's saved data lives, for `fetchFile` to read when
  *  prefilling the edit dialog. */
 export const workflowFilePath = (workflowPath: string) => `${workflowPath}/workflow.json`
+
+/** Rejects if the name is taken, which is what the dialog reports. */
+export const createAgent = (parent: string, details: NewAgentDetails) =>
+  request<{ path: string }>('POST', '/entries', { parent, type: 'agent', ...details }).then(
+    (body) => body.path,
+  )
+
+/** Overwrites an existing agent's description. Its path never changes,
+ *  since the name is fixed after creation. */
+export const updateAgent = (path: string, edits: AgentEdits) =>
+  request<{ path: string }>('PUT', '/entries', { path, type: 'agent', ...edits }).then(
+    (body) => body.path,
+  )
+
+/** Where an agent's saved data lives, for `fetchFile` to read when
+ *  prefilling the edit dialog. */
+export const agentFilePath = (agentPath: string) => `${agentPath}/agent.json`
 
 /** Resolves to the entry's new path, which differs from the old one. */
 export const renameEntry = (path: string, name: string) =>

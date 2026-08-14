@@ -17,9 +17,24 @@ const FIXED_TRAILING_LABEL = 'Done'
  *  deleting stay stable while a name is blank or mid-edit. */
 type DraftColumn = { key: string; name: string; actor: 'bot' | 'human'; agent: string | null }
 
+/** An agent a bot column can be assigned to — scoped by the caller to those
+ *  living under the same project as the workflow being edited. */
+export type AvailableAgent = { name: string; path: string }
+
 type Props =
-  | { mode: 'create'; onCreate: (details: NewWorkflowDetails) => Promise<void>; onCancel: () => void }
-  | { mode: 'edit'; node: TreeNode; onSave: (edits: WorkflowEdits) => Promise<void>; onCancel: () => void }
+  | {
+      mode: 'create'
+      availableAgents: AvailableAgent[]
+      onCreate: (details: NewWorkflowDetails) => Promise<void>
+      onCancel: () => void
+    }
+  | {
+      mode: 'edit'
+      node: TreeNode
+      availableAgents: AvailableAgent[]
+      onSave: (edits: WorkflowEdits) => Promise<void>
+      onCancel: () => void
+    }
 
 /**
  * Asks for what a workflow is made from. Create and edit share one form
@@ -28,7 +43,14 @@ type Props =
  */
 export function WorkflowDialog(props: Props) {
   if (props.mode === 'edit') {
-    return <EditWorkflowDialog node={props.node} onSave={props.onSave} onCancel={props.onCancel} />
+    return (
+      <EditWorkflowDialog
+        node={props.node}
+        availableAgents={props.availableAgents}
+        onSave={props.onSave}
+        onCancel={props.onCancel}
+      />
+    )
   }
 
   return (
@@ -38,6 +60,7 @@ export function WorkflowDialog(props: Props) {
       initialName=""
       initialDescription=""
       initialColumns={[]}
+      availableAgents={props.availableAgents}
       onCancel={props.onCancel}
       onSubmit={(values) => props.onCreate(values)}
     />
@@ -46,10 +69,12 @@ export function WorkflowDialog(props: Props) {
 
 function EditWorkflowDialog({
   node,
+  availableAgents,
   onSave,
   onCancel,
 }: {
   node: TreeNode
+  availableAgents: AvailableAgent[]
   onSave: (edits: WorkflowEdits) => Promise<void>
   onCancel: () => void
 }) {
@@ -91,6 +116,7 @@ function EditWorkflowDialog({
       initialName={node.name}
       initialDescription={parsed.description}
       initialColumns={parsed.columns}
+      availableAgents={availableAgents}
       onCancel={onCancel}
       onSubmit={(values) => onSave({ description: values.description, columns: values.columns })}
     />
@@ -132,6 +158,7 @@ type FormProps = {
   initialName: string
   initialDescription: string
   initialColumns: DraftColumn[]
+  availableAgents: AvailableAgent[]
   onCancel: () => void
   onSubmit: (values: { name: string; description: string; columns: CustomWorkflowColumn[] }) => Promise<void>
 }
@@ -142,6 +169,7 @@ function WorkflowForm({
   initialName,
   initialDescription,
   initialColumns,
+  availableAgents,
   onCancel,
   onSubmit,
 }: FormProps) {
@@ -318,8 +346,13 @@ function WorkflowForm({
                     onChange={(event) => updateColumn(column.key, { agent: event.target.value || null })}
                   >
                     <option value="" disabled>
-                      No agents yet
+                      {availableAgents.length > 0 ? 'Choose an agent' : 'No agents yet'}
                     </option>
+                    {availableAgents.map((agent) => (
+                      <option key={agent.path} value={agent.path}>
+                        {agent.name}
+                      </option>
+                    ))}
                   </select>
                 )}
 

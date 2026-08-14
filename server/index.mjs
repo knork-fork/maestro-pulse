@@ -23,7 +23,7 @@ const ROOT = path.resolve(process.env.PROJECTS_ROOT ?? '/resources/projects')
  * Unmarked directories stay unclassified — see `directoryType`.
  */
 const TYPE_FILE = '.maestro.json'
-const CREATABLE_TYPES = ['folder', 'project', 'workflow']
+const CREATABLE_TYPES = ['folder', 'project', 'workflow', 'agent']
 
 /**
  * What a new project is given. Unlike TYPE_FILE these are the user's own — they
@@ -45,6 +45,10 @@ const FIXED_LEADING_COLUMNS = ['Backlog', 'Ready']
 const FIXED_TRAILING_COLUMN = 'Done'
 const MAX_WORKFLOW_COLUMNS = 20
 const MAX_COLUMN_NAME_LENGTH = 60
+
+/** What a new agent is given — a single file, same as a workflow, with no
+ *  fields that need server-side assembly. */
+const AGENT_FILE = 'agent.json'
 
 /** Bounds the recursive read against deep nesting and symlink cycles. */
 const MAX_DEPTH = 12
@@ -126,7 +130,9 @@ async function createEntry(req) {
             description: requiredText(body.description, 'description'),
             columns: validColumns(body.columns),
           }
-        : null
+        : type === 'agent'
+          ? { description: requiredText(body.description, 'description') }
+          : null
 
   await ensureRoot()
 
@@ -146,7 +152,8 @@ async function createEntry(req) {
   if (details) {
     try {
       if (type === 'project') await scaffoldProject(abs, details)
-      else await scaffoldWorkflow(abs, details)
+      else if (type === 'workflow') await scaffoldWorkflow(abs, details)
+      else await scaffoldAgent(abs, details)
     } catch (error) {
       // Half a project (or workflow) is worse than none, and the directory is
       // ours: undo it.
@@ -159,12 +166,12 @@ async function createEntry(req) {
 }
 
 /**
- * Overwrites an existing workflow's `workflow.json`. Unlike `createEntry`,
- * this never creates anything — it is scoped to entries this app already
- * marked with a recognized type, so it cannot become a way to write arbitrary
- * file content. Today only `workflow` is editable this way; every other type
- * still has no content-editing path, matching the "not yet wired" state of
- * projects.
+ * Overwrites an existing workflow's `workflow.json` or agent's `agent.json`.
+ * Unlike `createEntry`, this never creates anything — it is scoped to entries
+ * this app already marked with a recognized type, so it cannot become a way
+ * to write arbitrary file content. Today only `workflow` and `agent` are
+ * editable this way; every other type still has no content-editing path,
+ * matching the "not yet wired" state of projects.
  */
 async function updateEntry(req) {
   const body = await readJson(req)
@@ -172,18 +179,20 @@ async function updateEntry(req) {
   const type = validType(body.type)
   const abs = path.join(ROOT, target)
 
-  if (type !== 'workflow') throw new HttpError(400, `"${type}" cannot be edited`)
-  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
-    throw new HttpError(404, `No such workflow: ${target}`)
+  if (type !== 'workflow' && type !== 'agent') throw new HttpError(400, `"${type}" cannot be edited`)
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== type) {
+    throw new HttpError(404, `No such ${type}: ${target}`)
   }
 
   await guardFs(
     () =>
-      scaffoldWorkflow(abs, {
-        description: requiredText(body.description, 'description'),
-        columns: validColumns(body.columns),
-      }),
-    `No such workflow: ${target}`,
+      type === 'workflow'
+        ? scaffoldWorkflow(abs, {
+            description: requiredText(body.description, 'description'),
+            columns: validColumns(body.columns),
+          })
+        : scaffoldAgent(abs, { description: requiredText(body.description, 'description') }),
+    `No such ${type}: ${target}`,
   )
 
   return { status: 200, body: { path: target } }
@@ -332,6 +341,16 @@ async function scaffoldWorkflow(abs, { description, columns }) {
     path.join(abs, WORKFLOW_FILE),
     `${JSON.stringify({ description, columns: full }, null, 2)}\n`,
   )
+}
+
+/**
+ * Writes (or rewrites) an agent's `agent.json`. Used both to fill a freshly
+ * made agent directory and, from `updateEntry`, to save edits to an existing
+ * one — unlike a workflow, an agent has nothing that needs assembling
+ * server-side, so this is just the description.
+ */
+async function scaffoldAgent(abs, { description }) {
+  await writeFile(path.join(abs, AGENT_FILE), `${JSON.stringify({ description }, null, 2)}\n`)
 }
 
 // ---- validation ----

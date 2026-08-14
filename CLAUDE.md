@@ -57,6 +57,7 @@ dependency-free Node API that owns the folder tree.
 | Dialog shell | [src/components/Modal.tsx](src/components/Modal.tsx) |
 | What a new project is asked for | [src/components/NewProjectDialog.tsx](src/components/NewProjectDialog.tsx) |
 | What a workflow is created/edited with, columns included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
+| What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
 | Rename dialog / delete confirmation | [src/components/RenameDialog.tsx](src/components/RenameDialog.tsx), [src/components/ConfirmDialog.tsx](src/components/ConfirmDialog.tsx) |
 | Pending + error state for one user action | [src/hooks/useAsyncAction.ts](src/hooks/useAsyncAction.ts) |
 | Mirroring a Set to localStorage | [src/hooks/usePersistentSet.ts](src/hooks/usePersistentSet.ts) |
@@ -163,9 +164,10 @@ unresolved rather than followed. Nothing re-reads a file that changes on disk
 under an open view. A project's details cannot be edited after the fact, and
 renaming one does not revisit what was written into it. A workflow's own
 description/columns *are* editable after creation (unlike a project) — only
-its name is fixed. Opening a workflow's board shows only its name; there is no
-kanban rendering yet, and the agent dropdown has no agents to offer, since
-nothing yet registers what an "agent" is.
+its name is fixed; the same is true of an agent's description. Opening a
+workflow's board shows only its name; there is no kanban rendering yet.
+Opening an agent's view likewise shows only its name — there is no richer
+agent detail (model, tools, etc.) yet.
 
 ## Data shape
 
@@ -208,6 +210,19 @@ workflow's board is a synthetic selection, not a real file — see
 `workflowBoardPath`/`parseBoardPath` in [tree.ts](src/data/tree.ts) and where
 [MainPane.tsx](src/components/MainPane.tsx) checks for it before falling
 through to the file-view logic below.
+
+An `agent` is marked and created the same way, one level down inside a
+project's `agents` folder instead — see `scaffoldAgent` in
+[server/index.mjs](server/index.mjs) and
+[AgentDialog.tsx](src/components/AgentDialog.tsx). It has nothing analogous to
+a workflow's columns, so its own content (`agent.json`) is just a description,
+editable the same narrow way through `updateEntry`; its name is likewise
+fixed. Opening an agent's view is a synthetic selection mirroring a workflow's
+board — see `agentViewPath`/`parseAgentViewPath` in
+[tree.ts](src/data/tree.ts). A workflow's bot columns can be assigned one of
+the agents living under the same project; [ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx)
+computes that list from the already-loaded tree (there is no dedicated list
+endpoint) and hands it to [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx).
 
 A file's contents cross the wire as text wrapped in JSON, because the API has no
 non-JSON response path. The read is capped and refuses anything that is not a
