@@ -38,6 +38,8 @@ const MAX_DEPTH = 12
 const MAX_BODY_BYTES = 64 * 1024
 const MAX_NAME_LENGTH = 255
 const MAX_TEXT_LENGTH = 4096
+/** Bounds a read the way MAX_BODY_BYTES bounds a write. */
+const MAX_READ_BYTES = 512 * 1024
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -50,6 +52,7 @@ class HttpError extends Error {
 
 const routes = {
   'GET /api/tree': getTree,
+  'GET /api/file': getFile,
   'POST /api/entries': createEntry,
   'PATCH /api/entry': renameEntry,
   'DELETE /api/entry': deleteEntry,
@@ -57,6 +60,26 @@ const routes = {
 
 async function getTree() {
   return { status: 200, body: { nodes: await readTree('', 0) } }
+}
+
+/**
+ * Reads one file as text, for whatever the client shows it in.
+ *
+ * One `stat` answers both questions worth asking before reading a byte: that it
+ * is a file at all, and that it is small enough to hand back in a JSON response.
+ * The encoding is `utf8` unconditionally — this serves files to look at, and the
+ * client decides which of them are worth looking at.
+ */
+async function getFile(_req, url) {
+  const target = visiblePath(relativePath(url.searchParams.get('path')))
+  const abs = path.join(ROOT, target)
+
+  const info = await guardFs(() => stat(abs), `No such file: ${target}`)
+  if (!info.isFile()) throw new HttpError(400, `Not a file: ${target}`)
+  if (info.size > MAX_READ_BYTES) throw new HttpError(413, 'That file is too large to show')
+
+  const content = await guardFs(() => readFile(abs, 'utf8'), `No such file: ${target}`)
+  return { status: 200, body: { path: target, content } }
 }
 
 /**
@@ -264,6 +287,22 @@ function relativePath(input, { allowRoot = false } = {}) {
   return rel
 }
 
+/**
+ * A path held to the same visibility rule the tree renders by: `readTree` skips
+ * dotfiles, so nothing may read one either — serving what the browser cannot see
+ * would make the marker reachable and the two halves disagree about what exists.
+ *
+ * Note this is a *read* rule. `validName` refuses to create a dotted name, but
+ * `relativePath` deliberately says nothing about them.
+ */
+function visiblePath(rel) {
+  if (rel.split('/').some((segment) => segment.startsWith('.'))) {
+    throw new HttpError(404, `No such file: ${rel}`)
+  }
+
+  return rel
+}
+
 function validType(input) {
   if (!CREATABLE_TYPES.includes(input)) {
     throw new HttpError(400, `"type" must be one of: ${CREATABLE_TYPES.join(', ')}`)
@@ -365,6 +404,8 @@ function mapFsError(error, notFoundMessage) {
       return new HttpError(404, notFoundMessage ?? 'Not found')
     case 'ENOTDIR':
       return new HttpError(400, 'That path is not a folder')
+    case 'EISDIR':
+      return new HttpError(400, 'That path is not a file')
     case 'ENOTEMPTY':
       return new HttpError(409, 'That folder is not empty')
     case 'EACCES':

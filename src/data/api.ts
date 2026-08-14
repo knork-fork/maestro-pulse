@@ -17,6 +17,13 @@ export type ProjectDetails = {
 export const fetchTree = () =>
   request<{ nodes: TreeNode[] }>('GET', '/tree').then((body) => body.nodes)
 
+/** One file's text. Rejects if it is missing, not a file, or too large to show. */
+export const fetchFile = (path: string) =>
+  request<{ path: string; content: string }>(
+    'GET',
+    `/file?path=${encodeURIComponent(path)}`,
+  ).then((body) => body.content)
+
 /** Rejects if `name` is taken, which is what the draft row reports. */
 export const createFolder = (parent: string, name: string) =>
   request<{ path: string }>('POST', '/entries', { parent, type: 'folder', name }).then(

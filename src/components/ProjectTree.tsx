@@ -1,9 +1,10 @@
 import { createContext, useContext, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
-import type { CreatableType, TreeNode } from '../data/tree'
+import type { BranchNode, CreatableType, TreeNode } from '../data/tree'
 import { ROOT_PATH } from '../data/api'
-import { acceptsNewChildren, childrenOf, isExpandable } from '../data/tree'
+import { acceptsNewChildren, childrenOf, isExpandable, isOrganizational } from '../data/tree'
 import { useAsyncAction } from '../hooks/useAsyncAction'
+import { fileContext, viewFor } from '../views/registry'
 import { classes } from './classes'
 import { ChevronIcon, FileIcon, FolderIcon } from './icons'
 import { Menu, anchorFromPoint } from './Menu'
@@ -23,6 +24,8 @@ const INDENT_OFFSET = 6
 
 type Actions = {
   onToggle: (path: string) => void
+  /** Opens a file in the main pane. Only offered where a view claims it. */
+  onSelect: (path: string) => void
   /** Asks for a new entry — nothing is created until it has been described. */
   onCreate: (parentPath: string, type: CreatableType) => void
   onCommitDraft: (name: string) => Promise<void>
@@ -34,10 +37,11 @@ type Actions = {
 type Props = Actions & {
   nodes: TreeNode[]
   expanded: Set<string>
+  selectedPath: string | null
   draft: Draft | null
 }
 
-export function ProjectTree({ nodes, expanded, draft, ...actions }: Props) {
+export function ProjectTree({ nodes, expanded, selectedPath, draft, ...actions }: Props) {
   const [menu, setMenu] = useState<{ node: TreeNode; anchor: MenuAnchor } | null>(null)
 
   const openMenu = (node: TreeNode, event: MouseEvent) => {
@@ -48,9 +52,16 @@ export function ProjectTree({ nodes, expanded, draft, ...actions }: Props) {
 
   return (
     <TreeContext.Provider
-      value={{ ...actions, expanded, draft, openMenu, activePath: menu?.node.path ?? null }}
+      value={{
+        ...actions,
+        expanded,
+        selectedPath,
+        draft,
+        openMenu,
+        activePath: menu?.node.path ?? null,
+      }}
     >
-      <TreeList nodes={nodes} parentPath={ROOT_PATH} depth={0} role="tree" />
+      <TreeList nodes={nodes} parent={null} depth={0} role="tree" />
 
       {menu && (
         <Menu
@@ -64,60 +75,97 @@ export function ProjectTree({ nodes, expanded, draft, ...actions }: Props) {
 }
 
 /**
- * A file has nothing to create inside it, so it is not offered. Anything else
- * is, but greyed where the rules refuse it — on a project above all, where the
- * absence of the entries would read as the menu having forgotten them.
+ * Always the same four entries, greyed where the rules refuse them — a menu that
+ * changes shape from row to row reads as having forgotten something.
+ *
+ * What that leaves enabled is the difference between the organization and its
+ * contents: only a `folder` takes new children, and only a `folder` or a `project`
+ * is ours to rename or delete. What is inside a project is the user's own.
  */
-const menuItems = (node: TreeNode, actions: Actions): MenuItem[] => [
-  ...(node.type === 'file'
-    ? []
-    : createItems((type) => actions.onCreate(node.path, type), !acceptsNewChildren(node))),
-  { label: 'Rename', onSelect: () => actions.onRequestRename(node) },
-  { label: 'Delete', danger: true, onSelect: () => actions.onRequestDelete(node) },
-]
+const menuItems = (node: TreeNode, actions: Actions): MenuItem[] => {
+  const editable = isOrganizational(node)
+
+  return [
+    ...createItems((type) => actions.onCreate(node.path, type), !acceptsNewChildren(node)),
+    { label: 'Rename', disabled: !editable, onSelect: () => actions.onRequestRename(node) },
+    {
+      label: 'Delete',
+      danger: true,
+      disabled: !editable,
+      onSelect: () => actions.onRequestDelete(node),
+    },
+  ]
+}
 
 // ---- rows ----
 
 type ListProps = {
   nodes: TreeNode[]
-  /** Whose children these are, so the draft row lands in the right list. */
-  parentPath: string
+  /**
+   * Whose children these are — the node itself, not just its path, because a row
+   * needs it to decide whether a file inside it can be opened. Null at the root,
+   * which is a directory on disk but not a node.
+   */
+  parent: BranchNode | null
   depth: number
   role: 'tree' | 'group'
 }
 
-function TreeList({ nodes, parentPath, depth, role }: ListProps) {
+function TreeList({ nodes, parent, depth, role }: ListProps) {
   const { draft } = useTreeContext()
+  const parentPath = parent?.path ?? ROOT_PATH
 
   return (
     <ul className="tree__list" role={role}>
       {nodes.map((node) => (
-        <TreeItem key={node.path} node={node} depth={depth} />
+        <TreeItem key={node.path} node={node} parent={parent} depth={depth} />
       ))}
       {draft?.parentPath === parentPath && <DraftItem depth={depth} />}
     </ul>
   )
 }
 
-function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
-  const { expanded, draft, activePath, onToggle, onCreate, openMenu } = useTreeContext()
+type ItemProps = { node: TreeNode; parent: BranchNode | null; depth: number }
+
+function TreeItem({ node, parent, depth }: ItemProps) {
+  const { expanded, selectedPath, draft, activePath, onToggle, onSelect, onCreate, openMenu } =
+    useTreeContext()
 
   const expandable = isExpandable(node)
   const open = expandable && expanded.has(node.path)
   const children = childrenOf(node)
   const holdsDraft = draft?.parentPath === node.path
 
+  // Where the file's parent earns its keep: what a file opens as depends on where
+  // it sits, so a row cannot answer "can this be clicked?" on its own.
+  const context = fileContext(node, parent)
+  const openable = context !== null && viewFor(context) !== null
+  const selected = selectedPath === node.path
+
   return (
-    <li role="treeitem" aria-expanded={expandable ? open : undefined}>
+    <li
+      role="treeitem"
+      aria-expanded={expandable ? open : undefined}
+      aria-selected={openable ? selected : undefined}
+    >
       <div
-        className={classes(['tree__row', activePath === node.path && 'tree__row--active'])}
+        className={classes([
+          'tree__row',
+          activePath === node.path && 'tree__row--active',
+          selected && 'tree__row--selected',
+        ])}
         style={indentAt(depth)}
         onContextMenu={(event) => openMenu(node, event)}
       >
         <button
           type="button"
-          className="tree__toggle"
-          onClick={() => expandable && onToggle(node.path)}
+          // A row that does nothing must not invite the click: `project.json` and
+          // friends are listed, not opened, until some view claims them.
+          className={classes(['tree__toggle', !expandable && !openable && 'tree__toggle--inert'])}
+          onClick={() => {
+            if (expandable) onToggle(node.path)
+            else if (openable) onSelect(node.path)
+          }}
         >
           <Glyphs node={node} open={open} />
           <span className="tree__label">{node.name}</span>
@@ -133,8 +181,10 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
         )}
       </div>
 
+      {/* `isExpandable` narrows, so `open` is already proof this holds children —
+          which is what lets the node itself be handed down as the parent. */}
       {open && (children.length > 0 || holdsDraft) && (
-        <TreeList nodes={children} parentPath={node.path} depth={depth + 1} role="group" />
+        <TreeList nodes={node.children} parent={node} depth={depth + 1} role="group" />
       )}
     </li>
   )
@@ -217,6 +267,8 @@ const indentAt = (depth: number) => ({ paddingLeft: `${depth * INDENT + INDENT_O
 
 type TreeContextValue = Actions & {
   expanded: Set<string>
+  /** The file the main pane is showing. Persistent, unlike `activePath`. */
+  selectedPath: string | null
   draft: Draft | null
   /** The row whose context menu is open, kept highlighted while it is. */
   activePath: string | null

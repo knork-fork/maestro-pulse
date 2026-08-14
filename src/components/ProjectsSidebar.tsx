@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ROOT_PATH } from '../data/api'
 import type { CreatableType, TreeNode } from '../data/tree'
-import { useProjectTree } from '../hooks/useProjectTree'
+import type { ProjectTreeState } from '../hooks/useProjectTree'
 import { ConfirmDialog } from './ConfirmDialog'
 import { NewMenu } from './NewMenu'
 import { NewProjectDialog } from './NewProjectDialog'
@@ -18,9 +18,11 @@ import { RefreshIcon } from './icons'
  * Both "+" menus and the tree's context menu funnel into `startCreate`, which is
  * where the two kinds part company: a folder is named in the tree, a project is
  * asked about in a dialog.
+ *
+ * The tree itself is handed in rather than read here, because the main pane shows
+ * what is selected in it; see [App.tsx](../App.tsx).
  */
-export function ProjectsSidebar() {
-  const tree = useProjectTree()
+export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
   const [draft, setDraft] = useState<Draft | null>(null)
   /** The parent a project is being described for, if one is. */
   const [creatingIn, setCreatingIn] = useState<string | null>(null)
@@ -83,8 +85,10 @@ export function ProjectsSidebar() {
           <ProjectTree
             nodes={tree.nodes}
             expanded={tree.expanded}
+            selectedPath={tree.selectedPath}
             draft={draft}
             onToggle={tree.toggle}
+            onSelect={tree.select}
             onCreate={startCreate}
             onCommitDraft={commitDraft}
             onCancelDraft={() => setDraft(null)}
@@ -120,11 +124,8 @@ export function ProjectsSidebar() {
       {deleting && (
         <ConfirmDialog
           title={`Delete ${deleting.name}?`}
-          message={
-            deleting.type === 'file'
-              ? `"${deleting.name}" will be deleted from disk.`
-              : `"${deleting.name}" and everything inside it will be deleted from disk.`
-          }
+          // Only folders and projects can get here, and both hold things.
+          message={`"${deleting.name}" and everything inside it will be deleted from disk.`}
           confirmLabel="Delete"
           danger
           onConfirm={async () => {

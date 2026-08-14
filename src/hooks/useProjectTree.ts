@@ -7,13 +7,19 @@ import { usePersistentSet } from './usePersistentSet'
 const EXPANDED_STORAGE_KEY = 'maestro-pulse:tree-expanded'
 
 /**
- * Owns the sidebar's tree: the nodes read from the API, and which rows are
- * expanded.
+ * Owns the tree both panes read: the nodes from the API, which rows are expanded,
+ * and which file is selected.
  *
  * Every mutation re-reads the tree rather than patching the local copy — the
- * filesystem is the source of truth, and it can change without us. Expansion is
- * kept in step by hand (a rename moves a subtree's paths, a delete retires
- * them), so a reload never silently collapses what the user had open.
+ * filesystem is the source of truth, and it can change without us. Expansion and
+ * the selection are kept in step by hand (a rename moves a subtree's paths, a
+ * delete retires them), so a reload never silently collapses what the user had
+ * open or blanks the file they were reading.
+ *
+ * Only changes made *through here* need that upkeep. For anything else — an edit
+ * on disk, or the refresh button — a selected path that has gone simply stops
+ * resolving against `nodes`, and the pane falls back to its empty state on its
+ * own. That is why there is no cleanup effect to be found.
  *
  * The mutations reject on failure, deliberately: the control that started one
  * reports it in place (see `useAsyncAction`). Only `reload` reports through
@@ -22,6 +28,11 @@ const EXPANDED_STORAGE_KEY = 'maestro-pulse:tree-expanded'
 export function useProjectTree() {
   const [nodes, setNodes] = useState<TreeNode[]>([])
   const [expanded, setExpanded] = usePersistentSet(EXPANDED_STORAGE_KEY)
+  /**
+   * Deliberately not persisted: reopening the app onto a file the user did not
+   * ask for is worse than reopening onto nothing.
+   */
+  const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   /** Distinguishes "nothing read yet" from "nothing there", for the empty state. */
@@ -87,6 +98,8 @@ export function useProjectTree() {
     async (path: string, name: string) => {
       const next = await api.renameEntry(path, name)
       setExpanded((prev) => reparent(prev, path, next))
+      // Renaming a folder moves everything under it, the open file included.
+      setSelectedPath((prev) => (prev && isWithin(prev, path) ? next + prev.slice(path.length) : prev))
       await load()
     },
     [load, setExpanded],
@@ -96,6 +109,7 @@ export function useProjectTree() {
     async (path: string) => {
       await api.deleteEntry(path)
       setExpanded((prev) => forget(prev, path))
+      setSelectedPath((prev) => (prev && isWithin(prev, path) ? null : prev))
       await load()
     },
     [load, setExpanded],
@@ -104,11 +118,13 @@ export function useProjectTree() {
   return {
     nodes,
     expanded,
+    selectedPath,
     error,
     busy,
     loaded,
     reload,
     toggle,
+    select: setSelectedPath,
     reveal,
     createFolder,
     createProject,
@@ -116,6 +132,9 @@ export function useProjectTree() {
     remove,
   }
 }
+
+/** What the panes share, for whoever is handed it rather than calling the hook. */
+export type ProjectTreeState = ReturnType<typeof useProjectTree>
 
 /** `a/b/c` → `a`, `a/b`, `a/b/c`; the root (empty path) has no ancestors. */
 const selfAndAncestors = (path: string): string[] => {

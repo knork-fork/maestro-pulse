@@ -26,9 +26,9 @@
 
 ## What this is
 
-A three-pane UI shell: a left projects sidebar, an empty main area, and a right
-sessions sidebar. The sidebar browses and edits a real folder tree on disk —
-`resources/projects` — through a small API of its own.
+A three-pane UI shell: a left projects sidebar, a main area showing whichever
+file is selected, and a right sessions sidebar. The sidebar browses and edits a
+real folder tree on disk — `resources/projects` — through a small API of its own.
 
 Two services, both in Docker (nothing is installed on the host): a
 client-rendered SPA (React + TypeScript, built by Vite, served by nginx), and a
@@ -38,12 +38,17 @@ dependency-free Node API that owns the folder tree.
 
 | Concern | File |
 |---------|------|
-| Pane composition — which sidebar sits where | [src/App.tsx](src/App.tsx) |
+| Pane composition, and the tree state the panes share | [src/App.tsx](src/App.tsx) |
 | React entry point / root mount | [src/main.tsx](src/main.tsx) |
 | HTML shell Vite builds from | [index.html](index.html) |
 | **Backend** — every filesystem read and write, and the rules for them | [server/index.mjs](server/index.mjs) |
 | Left sidebar — composition, plus the draft row and dialogs in flight | [src/components/ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx) |
-| Tree state — nodes, expansion, and the mutations | [src/hooks/useProjectTree.ts](src/hooks/useProjectTree.ts) |
+| Tree state — nodes, expansion, selection, and the mutations | [src/hooks/useProjectTree.ts](src/hooks/useProjectTree.ts) |
+| Main pane — the states of showing a file | [src/components/MainPane.tsx](src/components/MainPane.tsx) |
+| Which files can be opened, and what renders each | [src/views/registry.ts](src/views/registry.ts) |
+| The markdown view, and its link/image policy | [src/views/MarkdownView.tsx](src/views/MarkdownView.tsx) |
+| The JSON view — pretty-printing and colouring | [src/views/JsonView.tsx](src/views/JsonView.tsx) |
+| Reading one file's text, and the races that come with it | [src/hooks/useFileContent.ts](src/hooks/useFileContent.ts) |
 | Calling the API, and turning its failures into messages | [src/data/api.ts](src/data/api.ts) |
 | `TreeNode` and the predicates the UI branches on | [src/data/tree.ts](src/data/tree.ts) |
 | Tree rendering, rows, and the draft row being named | [src/components/ProjectTree.tsx](src/components/ProjectTree.tsx) |
@@ -56,7 +61,7 @@ dependency-free Node API that owns the folder tree.
 | Mirroring a Set to localStorage | [src/hooks/usePersistentSet.ts](src/hooks/usePersistentSet.ts) |
 | Right sidebar — title, empty state | [src/components/SessionsSidebar.tsx](src/components/SessionsSidebar.tsx) |
 | All SVG icons | [src/components/icons.tsx](src/components/icons.tsx) |
-| All styling — theme tokens, pane grid, tree, controls, dialogs | [src/styles.css](src/styles.css) |
+| All styling — theme tokens, pane grid, tree, controls, dialogs, rendered markdown | [src/styles.css](src/styles.css) |
 | Keeping the project store out of git | [resources/.gitignore](resources/.gitignore) |
 | Build tooling + dependencies | [package.json](package.json), [vite.config.ts](vite.config.ts), [tsconfig.json](tsconfig.json) |
 | Three-stage image (SPA build → api → nginx serve) | [Dockerfile](Dockerfile) |
@@ -81,9 +86,11 @@ The api service is the only thing that touches the filesystem. Its root is
 `resources/projects`, bind-mounted from the working tree, and every path in a
 request is relative to that root — validated in one place
 (`relativePath`/`validName` in [server/index.mjs](server/index.mjs)) so nothing
-can address anything outside it. It runs as the host user, not root, because it
-writes into the user's own working tree; see the `user:` note in
-[docker-compose.yml](docker-compose.yml).
+can address anything outside it. Reading a file's text goes through that same
+gate and one more, `visiblePath`: what the tree does not show, nothing may read,
+so the two halves cannot disagree about what exists. It runs as the host user,
+not root, because it writes into the user's own working tree; see the `user:` note
+in [docker-compose.yml](docker-compose.yml).
 
 The store is deliberately untracked ([resources/.gitignore](resources/.gitignore)):
 it holds whatever the user creates or drops in.
@@ -91,13 +98,27 @@ it holds whatever the user creates or drops in.
 ### Frontend state
 
 There is no store. [useProjectTree.ts](src/hooks/useProjectTree.ts) owns the
-nodes and the expansion set, and is the only caller of the mutations; every
-mutation re-reads the whole tree afterwards, because the filesystem is the source
-of truth and can change without us. Expansion is adjusted alongside renames and
-deletes there, so reloading — including the refresh button — never collapses what
-the user had open. It is persisted by
+nodes, the expansion set and which file is selected, and is the only caller of the
+mutations; every mutation re-reads the whole tree afterwards, because the
+filesystem is the source of truth and can change without us. Expansion and the
+selection are both adjusted alongside renames and deletes there, so reloading —
+including the refresh button — never collapses what the user had open or blanks
+the file they were reading. Expansion alone is persisted, by
 [usePersistentSet.ts](src/hooks/usePersistentSet.ts), which owns the storage
 key's serialized form while its caller declares the key.
+
+The hook is called in [App.tsx](src/App.tsx) rather than in a pane, because two
+panes read it: the sidebar browses and mutates the tree, and the main pane shows
+whatever is selected in it. The selection is a *path*, resolved against the current
+nodes on every render, which is what makes a stale one harmless — a path that stops
+resolving falls back to the empty state without anyone clearing it.
+
+Which files can be opened at all, and what renders each, is decided in one place:
+[views/registry.ts](src/views/registry.ts). A view is a matcher plus a renderer,
+matching on the file *and the directory holding it*, so adding a file type is an
+entry in a list. A row consults it to know whether a click means anything, which is
+why [ProjectTree.tsx](src/components/ProjectTree.tsx) threads each node's parent
+down the recursion.
 
 Failures are reported by whichever control asked for the work: the mutations
 reject, and the draft row and dialogs surface that in place via
@@ -119,10 +140,12 @@ following the anchor.
 
 ### Not yet wired
 
-The filter input is an inert placeholder. Nothing reads a project's contents
-back yet: the API writes them at creation, and no one has looked at them since.
-A project's details cannot be edited after the fact, and renaming one does not
-revisit what was written into it.
+The filter input is an inert placeholder. Only files a view claims can be opened
+at all — every other file row is inert. Nothing serves a project's raw bytes, so
+relative images and links inside a rendered file cannot resolve and are shown as
+unresolved rather than followed. Nothing re-reads a file that changes on disk
+under an open view. A project's details cannot be edited after the fact, and
+renaming one does not revisit what was written into it.
 
 ## Data shape
 
@@ -152,6 +175,12 @@ Scaffolding is the API's job, not the client's, so what a project *is* has one
 answer on the side that owns the filesystem; see `scaffoldProject`. Unlike the
 marker, what it writes is ordinary content: visible in the tree, and the user's
 to edit afterwards.
+
+A file's contents cross the wire as text wrapped in JSON, because the API has no
+non-JSON response path. The read is capped and refuses anything that is not a
+file; see `getFile` and `MAX_READ_BYTES` in [server/index.mjs](server/index.mjs).
+Which files are worth reading is the client's call, not the endpoint's — see
+`viewFor` in [src/views/registry.ts](src/views/registry.ts).
 
 Persisted to `localStorage`: a JSON `string[]` of expanded tree paths, written
 and re-validated by [usePersistentSet.ts](src/hooks/usePersistentSet.ts).
