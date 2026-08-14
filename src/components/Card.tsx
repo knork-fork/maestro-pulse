@@ -1,5 +1,6 @@
 import type { WorkflowCard } from '../data/api'
 import { useAsyncAction } from '../hooks/useAsyncAction'
+import { agentAvatar } from './avatar'
 import { CardMoveMenu } from './CardMoveMenu'
 import { classes } from './classes'
 import { ArchiveIcon, TrashIcon } from './icons'
@@ -50,7 +51,9 @@ export function Card({
   return (
     <li className="card">
       <div className={classes(['card__avatar', agentName && 'card__avatar--bot'])}>
-        {agentName && <span className="card__avatar-initials">{initials(agentName)}</span>}
+        {agentName && (
+          <img className="card__avatar-icon" src={agentAvatar(agentName)} alt={agentName} title={agentName} />
+        )}
       </div>
 
       <button type="button" className="card__title" onClick={onOpen}>
@@ -104,13 +107,4 @@ export function Card({
       )}
     </li>
   )
-}
-
-/** A Trello-style avatar: the agent's initials, not an icon — one letter
- *  per the first two words, or the first two letters of a single word. */
-function initials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean)
-  if (words.length === 0) return '?'
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
-  return (words[0][0] + words[1][0]).toUpperCase()
 }

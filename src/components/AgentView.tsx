@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { agentFilePath } from '../data/api'
 import { useFileContent } from '../hooks/useFileContent'
+import { agentAvatar } from './avatar'
 
 const STATUS_LABEL = 'Not running'
 
@@ -90,7 +91,7 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
     <div className="agent-view__card">
       <div className="agent-view__basics">
         <div className="agent-view__basics-left">
-          <div className="agent-view__avatar" />
+          <img className="agent-view__avatar" src={agentAvatar(name)} alt={name} />
 
           <div className="modal__field">
             <label className="modal__label" htmlFor="agent-view-heartbeat">
