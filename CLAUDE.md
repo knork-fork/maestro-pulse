@@ -26,39 +26,91 @@
 
 ## What this is
 
-<!-- Fill this in as soon as the project's purpose and shape are decided: one
-short paragraph — what the project is for, and the top-level split (services,
-packages, entry points). Replace this comment; do not leave a placeholder
-sentence behind. -->
+A three-pane UI shell: a left projects sidebar, an empty main area, and a right
+sessions sidebar. It is a client-rendered SPA (React + TypeScript, built by
+Vite, served by nginx). There is no backend — the project tree is hard-coded
+placeholder data, and the only persistence is browser-local UI state. Both the
+build and the serving happen in Docker; nothing is installed on the host.
 
 ## Layout
 
-<!-- One table of Concern → File, added incrementally as real files appear. One
-row per thing a reader might need to find; drop rows whose file is deleted or
-whose concern moves. Split into multiple tables (per service/package) only once
-there is more than one. -->
-
 | Concern | File |
 |---------|------|
-| | |
+| Pane composition — which sidebar sits where | [src/App.tsx](src/App.tsx) |
+| React entry point / root mount | [src/main.tsx](src/main.tsx) |
+| HTML shell Vite builds from | [index.html](index.html) |
+| Left sidebar — title, action buttons, filter input | [src/components/ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx) |
+| "New" button + its dropdown, positioning and dismissal | [src/components/NewMenu.tsx](src/components/NewMenu.tsx) |
+| Tree rendering, expand/collapse state, empty state | [src/components/ProjectTree.tsx](src/components/ProjectTree.tsx) |
+| Mirroring a Set to localStorage | [src/hooks/usePersistentSet.ts](src/hooks/usePersistentSet.ts) |
+| Placeholder project tree data | [src/data/projects.ts](src/data/projects.ts) |
+| Right sidebar — title, empty state | [src/components/SessionsSidebar.tsx](src/components/SessionsSidebar.tsx) |
+| All SVG icons | [src/components/icons.tsx](src/components/icons.tsx) |
+| All styling — theme tokens, pane grid, tree, controls | [src/styles.css](src/styles.css) |
+| Build tooling + dependencies | [package.json](package.json), [vite.config.ts](vite.config.ts), [tsconfig.json](tsconfig.json) |
+| Two-stage image (node build → nginx serve) | [Dockerfile](Dockerfile) |
+| nginx server + listen port | [nginx.conf](nginx.conf) |
+| Service definition + host port mapping | [docker-compose.yml](docker-compose.yml) |
+| User-facing run instructions | [README.md](README.md) |
 
 ## Architecture / data flow
 
-<!-- How the pieces talk to each other: entry points, ports/URLs, request or
-data flow, external services. Add sub-sections per non-obvious mechanism, each
-naming the files on both ends. -->
+Single service, no network data flow. The Dockerfile's first stage compiles the
+SPA with Vite; the second stage serves the resulting bundle from nginx. The
+container listens on 20444 and is published to the same port on the host, so the
+app is at `http://localhost:20444`.
+
+Unknown paths fall back to `index.html` (the `try_files` rule in
+[nginx.conf](nginx.conf)), so a client-side router can be added without touching
+the server config.
+
+State is local component state only — there is no store. Tree expansion lives in
+[ProjectTree.tsx](src/components/ProjectTree.tsx), keyed by each node's
+slash-joined ancestor path, and is persisted to `localStorage` by
+[usePersistentSet.ts](src/hooks/usePersistentSet.ts) so it survives reloads. That
+hook owns the storage key's serialized form; the key itself is declared by its
+caller.
+
+The two sidebars and the main pane are distinguished by background tokens at the
+top of [src/styles.css](src/styles.css); pane widths are tokens on the same
+block, and the panes themselves are one CSS grid on `.app`.
+
+[NewMenu.tsx](src/components/NewMenu.tsx) is shared by the sidebar header and by
+each eligible tree row. Its dropdown is portalled to `<body>` and positioned from
+the trigger's rect, because the tree scrolls and would otherwise clip an
+in-flow menu; that is also why it dismisses on scroll.
+
+### Not yet wired
+
+The refresh button and the filter input are inert placeholders. The "New" button
+opens its menu, but the menu's entries only dismiss it — neither creates
+anything yet.
 
 ## Data shape
 
-<!-- The shapes exchanged across boundaries (API payloads, persisted files, DB
-tables), each attributed to the file that owns it. Field names and types only —
-not what consumers do with them. -->
+`TreeNode`, defined and exported by [src/data/projects.ts](src/data/projects.ts),
+is the discriminated union the tree renders. Its variants are split at the
+project boundary — organizational `folder`s above it, a `project` marking it, and
+`directory`/`file` for a project's own contents. Every variant carries a `name`;
+all but `file` carry `children: TreeNode[]`. That file also owns the predicates
+the UI branches on, so the rule lives with the type rather than in components.
+This is the shape a real project source would need to produce.
+
+Persisted to `localStorage`: a JSON `string[]` of expanded tree paths, written
+and re-validated by [usePersistentSet.ts](src/hooks/usePersistentSet.ts).
 
 ## Run / apply changes / verify
 
-<!-- The exact commands to start, apply a change, and check it — including any
-step that is easy to forget (restarts with no hot reload, wrappers that must be
-used instead of the raw tool, lint/test entry points). -->
+The app is compiled into the image, so **any edit requires a rebuild** —
+restarting the container alone serves the previous bundle.
 
 ```bash
+docker compose up -d --build     # start, and apply any change
+curl -sI http://localhost:20444/ # verify (expect 200)
+docker compose logs web          # nginx access/error logs
+docker compose down              # stop
+
+# type check (the image build does NOT type-check — vite only transpiles)
+docker build --target build -t maestro-pulse-build . && \
+  docker run --rm maestro-pulse-build npm run typecheck
 ```
