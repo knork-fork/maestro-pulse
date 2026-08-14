@@ -3,6 +3,7 @@ import { locate, parseAgentViewPath, parseBoardPath } from '../data/tree'
 import { useFileContent } from '../hooks/useFileContent'
 import type { FileContext, FileView } from '../views/registry'
 import { fileContext, viewFor } from '../views/registry'
+import { AgentView } from './AgentView'
 
 type Props = {
   nodes: TreeNode[]
@@ -36,15 +37,14 @@ export function MainPane({ nodes, selectedPath }: Props) {
     return <main className="main" />
   }
 
-  // Same trick for an agent's own (currently stub) view — see
-  // `agentViewPath` in ../data/tree.
+  // Same trick for an agent's own view — see `agentViewPath` in ../data/tree.
   const agentViewSourcePath = selectedPath === null ? null : parseAgentViewPath(selectedPath)
   if (agentViewSourcePath !== null) {
     const found = locate(nodes, agentViewSourcePath)
     if (found && found.node.type === 'agent') {
       return (
         <main className="main">
-          <div className="agent-placeholder">{found.node.name}</div>
+          <AgentView key={found.node.path} path={found.node.path} name={found.node.name} />
         </main>
       )
     }

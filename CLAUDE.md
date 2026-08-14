@@ -58,6 +58,7 @@ dependency-free Node API that owns the folder tree.
 | What a new project is asked for | [src/components/NewProjectDialog.tsx](src/components/NewProjectDialog.tsx) |
 | What a workflow is created/edited with, columns included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
 | What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
+| What an agent's own view renders — profile, dummy heartbeat/max-children/mission, sample pulse actions, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
 | Rename dialog / delete confirmation | [src/components/RenameDialog.tsx](src/components/RenameDialog.tsx), [src/components/ConfirmDialog.tsx](src/components/ConfirmDialog.tsx) |
 | Pending + error state for one user action | [src/hooks/useAsyncAction.ts](src/hooks/useAsyncAction.ts) |
 | Mirroring a Set to localStorage | [src/hooks/usePersistentSet.ts](src/hooks/usePersistentSet.ts) |
@@ -166,8 +167,13 @@ renaming one does not revisit what was written into it. A workflow's own
 description/columns *are* editable after creation (unlike a project) — only
 its name is fixed; the same is true of an agent's description. Opening a
 workflow's board shows only its name; there is no kanban rendering yet.
-Opening an agent's view likewise shows only its name — there is no richer
-agent detail (model, tools, etc.) yet.
+Opening an agent's view shows a full profile card — its real `description`
+from `agent.json` alongside a heartbeat interval, a max-children limit, a
+mission statement, and a sample list of per-pulse actions — but only the name
+and description are real; the rest, plus the "Not running" status and the
+Spawn/Logs/Open session controls, are UI-only sample values with no session
+model, no persistence, and no server support behind them; see
+[AgentView.tsx](src/components/AgentView.tsx).
 
 ## Data shape
 

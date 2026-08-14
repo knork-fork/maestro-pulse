@@ -103,8 +103,9 @@ export function ProjectTree({ nodes, expanded, selectedPath, draft, ...actions }
  *
  * Four node shapes get a menu of their own instead, short-circuited before any
  * of that: a project's `workflows`/`agents` folder only offers "Add new
- * workflow"/"Add new agent", and a `workflow`/`agent` only offers Edit/Delete
- * — all a different shape entirely, not this one with items merely disabled.
+ * workflow"/"Add new agent", a `workflow` only offers Edit/Delete, and an
+ * `agent` offers Spawn above that same Edit/Delete pair — all a different
+ * shape entirely, not this one with items merely disabled.
  */
 const menuItems = (node: TreeNode, parent: BranchNode | null, actions: Actions): MenuItem[] => {
   if (isWorkflowsFolder(node, parent)) {
@@ -124,6 +125,8 @@ const menuItems = (node: TreeNode, parent: BranchNode | null, actions: Actions):
 
   if (node.type === 'agent') {
     return [
+      // Not wired to anything yet — spawning a session doesn't exist.
+      { label: 'Spawn', onSelect: () => {} },
       { label: 'Edit', onSelect: () => actions.onEditAgent(node) },
       { label: 'Delete', danger: true, onSelect: () => actions.onRequestDelete(node) },
     ]

@@ -390,17 +390,109 @@ body {
   font-weight: 600;
 }
 
-/* ---- agent view (stub) ---- */
+/* ---- agent view ---- */
 
-.agent-placeholder {
+.agent-view {
+  max-width: 62rem;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.agent-view__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agent-view__status {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.agent-view__card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  padding: 18px 20px;
+}
+
+.agent-view__card-title {
+  margin: 0 0 12px;
+  font-size: 1em;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.agent-view__basics { display: flex; gap: 24px; }
+
+.agent-view__basics-left {
+  flex: none;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-view__basics-right { flex: 1; min-width: 0; }
+
+.agent-view__avatar {
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--hover);
+}
+
+.agent-view__name { margin: 0 0 12px; font-size: 1.2em; font-weight: 600; }
+
+.agent-view__buttons { display: flex; gap: 8px; margin: 0 0 14px; }
+
+.agent-view__field + .agent-view__field { margin-top: 14px; }
+
+.agent-view__field-text { margin: 4px 0 0; line-height: 1.55; }
+
+.agent-view__range { display: flex; align-items: center; gap: 8px; }
+
+.agent-view__range-input { flex: 1; min-width: 0; accent-color: var(--agent); }
+
+.agent-view__range-value {
+  flex: none;
+  width: 4.5em;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.agent-view__pulse-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-view__pulse-item { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; }
+
+.agent-view__pulse-index {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--text-dim);
+  font-size: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  color: #ededf0;
-  font-size: 1.4em;
-  font-weight: 600;
 }
+
+.agent-view__pulse-text { flex: 1; line-height: 1.5; }
 
 /* ---- rendered json ---- */
 

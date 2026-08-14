@@ -17,7 +17,11 @@ export function SessionsSidebar() {
       </div>
 
       <div className="sessions">
-        {sessions.length === 0 && <p className="empty-state">No active sessions</p>}
+        {sessions.length === 0 && (
+          <p className="empty-state">
+            No active sessions. Right-click an agent in the left sidebar and choose Spawn to start one.
+          </p>
+        )}
       </div>
     </aside>
   )
