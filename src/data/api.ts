@@ -94,13 +94,15 @@ export type WorkflowColumn = {
  *  columns themselves already follow. Renaming the column out from under it
  *  is an accepted gap; see CLAUDE.md. `assigned` is purely cosmetic — an
  *  agent name (for now) shown as the card's avatar seed; `null`/absent shows
- *  no avatar at all. */
+ *  no avatar at all. `status` is likewise cosmetic — it only drives the
+ *  card's outline; `null`/absent/any other value shows no outline. */
 export type WorkflowCard = {
   id: string
   title: string
   description: string
   column: string
   assigned: string | null
+  status: 'in_session' | 'blocked' | null
 }
 
 export type CardAction = 'move-up' | 'move-down' | 'move-right' | 'delete' | 'archive'

@@ -43,10 +43,16 @@ export function Card({
   onMoveRight,
 }: Props) {
   const { pending, error, run } = useAsyncAction()
-  const { assigned } = card
+  const { assigned, status } = card
 
   return (
-    <li className="card">
+    <li
+      className={classes([
+        'card',
+        status === 'in_session' && 'card--status-in-session',
+        status === 'blocked' && 'card--status-blocked',
+      ])}
+    >
       <div className={classes(['card__avatar', assigned && 'card__avatar--bot'])}>
         {assigned && <img className="card__avatar-icon" src={agentAvatar(assigned)} alt="" title={assigned} />}
       </div>

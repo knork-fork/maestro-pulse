@@ -483,6 +483,30 @@ body {
   box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
 }
 
+.card--status-blocked {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 30%),
+    inset 0 0 0 2px var(--danger-solid);
+}
+
+.card--status-in-session {
+  animation: card-pulse-orange 3.2s ease-in-out infinite;
+}
+
+@keyframes card-pulse-orange {
+  0%,
+  100% {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 30%),
+      inset 0 0 0 2px var(--agent);
+  }
+  50% {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 30%),
+      inset 0 0 0 2px transparent;
+  }
+}
+
 .card__avatar {
   flex: none;
   width: 20px;
