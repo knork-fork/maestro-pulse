@@ -366,6 +366,8 @@ body {
   background: var(--bg-main);
   min-width: 0;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .viewer {
@@ -378,16 +380,256 @@ body {
   color: var(--danger);
 }
 
-/* ---- workflow board (stub) ---- */
+/* ---- kanban board ----
 
-.board-placeholder {
+   Full-height by construction: .main is a flex column, .board fills it
+   (flex: 1), and .board__columns is the only thing that scrolls — a column
+   scrolls its own cards vertically, .board__columns scrolls the row of
+   columns horizontally. That is what pins the horizontal scrollbar to the
+   true bottom of the pane instead of wherever the last card happens to end,
+   and keeps a bottom card's move popover from opening into a sliver of
+   space right above a scrollbar track. */
+
+/* The board's own panel — a bordered, distinctly-coloured surface with a
+   modest margin from .main's edges, rather than padding on a background
+   that's otherwise indistinguishable from the pane around it. */
+.board {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-sidebar);
+}
+
+.board__title {
+  flex: none;
+  margin: 0 0 14px;
+  font-size: 1.2em;
+  font-weight: 600;
+  color: #ededf0;
+}
+
+.board__columns {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.column {
+  flex: none;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  /* Lighter than the board panel behind it, so each column reads as its
+     own tray sitting inside that panel. */
+  background: var(--bg-main);
+  padding: 10px;
+}
+
+.column__header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 0 2px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+/* The one bot/human distinction — a small emoji, not a border or a solid
+   icon, so it doesn't compete for attention with every human column next
+   to it. */
+.column__bot-icon {
+  flex: none;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.column__cards {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0 2px 2px 0;
+  list-style: none;
+}
+
+/* ---- kanban card ---- */
+
+.card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  /* Lighter than the column behind it, so it reads as a raised chip. */
+  background: var(--bg-menu);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+}
+
+.card__avatar {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.card__avatar--bot {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  color: #ededf0;
-  font-size: 1.4em;
+  background: var(--agent);
+}
+
+.card__avatar-initials {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--bg-main);
+  letter-spacing: 0.02em;
+}
+
+.card__title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.card__title:hover { text-decoration: underline; }
+
+.card__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+}
+
+.card:hover .card__actions,
+.card__actions:focus-within,
+.card__actions:has(.card-move--open) { opacity: 1; }
+
+.card__delete:hover { color: var(--danger); }
+.card__archive:hover { color: var(--accent); }
+
+.card__error {
+  position: absolute;
+  inset: 100% 0 auto;
+  z-index: 1;
+  margin: 4px 0 0;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-menu);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+/* ---- the move control ---- */
+
+.card-move {
+  position: relative;
+  display: inline-flex;
+}
+
+.card-move__popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+  margin-top: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-menu);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 45%);
+}
+
+/* Flips upward when there isn't room below — same reasoning as Menu.tsx's
+   own flip, for a card near the bottom of a scrolled column. */
+.card-move__popover--above {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+/* ---- card detail modal ----
+
+   Each part of a card's full view is its own bordered block, so title,
+   description and "Attached" read as distinct sections rather than one
+   uniform block of text. */
+
+.card-detail__section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  padding: 14px 16px;
+}
+
+.card-detail__section + .card-detail__section,
+.card-detail__section + .card-detail__attached { margin-top: 12px; }
+
+.card-detail__section-title {
+  margin: 0 0 8px;
+  font-size: 0.95em;
   font-weight: 600;
+  color: var(--text-dim);
+}
+
+.card-detail__section .markdown > :first-child { margin-top: 0; }
+.card-detail__section .markdown > :last-child { margin-bottom: 0; }
+
+.card-detail__meta {
+  margin: -6px 0 12px;
+  color: var(--text-dim);
+  font-size: 0.9em;
+}
+
+/* A list, not prose — ready for real attached links; the empty state reads
+   as "a list with nothing in it" rather than a sentence about it. */
+.card-detail__attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card-detail__attachments-empty {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text-dim);
+  font-size: 0.92em;
 }
 
 /* ---- agent view ---- */
@@ -785,29 +1027,6 @@ body {
 .column-card[draggable="true"]:active { cursor: grabbing; }
 
 .column-card__name { flex: 1; }
-
-.column-card__switch {
-  display: flex;
-  flex: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: transparent;
-  padding: 0;
-  overflow: hidden;
-  cursor: pointer;
-  font: inherit;
-  color: var(--text-dim);
-}
-
-.column-card__switch span {
-  padding: 5px 8px;
-}
-
-.column-card__switch:not(.column-card__switch--bot) span:first-child,
-.column-card__switch.column-card__switch--bot span:last-child {
-  background: var(--accent);
-  color: #fff;
-}
 
 .column-card__agent { flex: none; width: 140px; }
 

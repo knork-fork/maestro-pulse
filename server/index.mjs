@@ -46,6 +46,14 @@ const FIXED_TRAILING_COLUMN = 'Done'
 const MAX_WORKFLOW_COLUMNS = 20
 const MAX_COLUMN_NAME_LENGTH = 60
 
+/**
+ * A card's own actions, applied one at a time by `PATCH /api/workflow-cards`.
+ * None of them grow `cards` — move/delete/archive only reorder, relabel,
+ * shrink, or transfer to `archived` — so unlike columns there is no length
+ * cap to enforce here.
+ */
+const CARD_ACTIONS = ['move-up', 'move-down', 'move-right', 'delete', 'archive']
+
 /** What a new agent is given — a single file, same as a workflow, with no
  *  fields that need server-side assembly. */
 const AGENT_FILE = 'agent.json'
@@ -74,6 +82,7 @@ const routes = {
   'PUT /api/entries': updateEntry,
   'PATCH /api/entry': renameEntry,
   'DELETE /api/entry': deleteEntry,
+  'PATCH /api/workflow-cards': updateWorkflowCard,
 }
 
 async function getTree() {
@@ -196,6 +205,33 @@ async function updateEntry(req) {
         : scaffoldAgent(abs, { description: requiredText(body.description, 'description') }),
     `No such ${type}: ${target}`,
   )
+
+  return { status: 200, body: { path: target } }
+}
+
+/**
+ * Applies exactly one action to one card in an existing workflow's `cards`/
+ * `archived` arrays, leaving `description`/`columns` untouched — unlike
+ * `updateEntry`, this never goes through `scaffoldWorkflow`, which reassembles
+ * columns and has nothing to say about a card move.
+ */
+async function updateWorkflowCard(req) {
+  const body = await readJson(req)
+  const target = relativePath(body.path)
+  const abs = path.join(ROOT, target)
+
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
+    throw new HttpError(404, `No such workflow: ${target}`)
+  }
+
+  const cardId = validCardId(body.cardId)
+  const action = validCardAction(body.action)
+
+  await guardFs(async () => {
+    const data = await readWorkflowJson(abs)
+    const updated = applyCardAction(data, cardId, action)
+    await writeFile(path.join(abs, WORKFLOW_FILE), `${JSON.stringify(updated, null, 2)}\n`)
+  }, `No such workflow: ${target}`)
 
   return { status: 200, body: { path: target } }
 }
@@ -339,11 +375,31 @@ async function scaffoldWorkflow(abs, { description, columns, readyAgent }) {
     ...columns,
     { name: FIXED_TRAILING_COLUMN },
   ]
+  const { cards, archived } = await existingCardData(abs)
 
   await writeFile(
     path.join(abs, WORKFLOW_FILE),
-    `${JSON.stringify({ description, columns: full }, null, 2)}\n`,
+    `${JSON.stringify({ description, columns: full, cards, archived }, null, 2)}\n`,
   )
+}
+
+/**
+ * Reads whatever cards/archived data an existing workflow.json already holds,
+ * so scaffoldWorkflow — a full-file rewrite — can carry them through a
+ * description/column edit instead of dropping them. Absent, unreadable or
+ * malformed all mean "nothing to preserve", the same rule directoryType uses
+ * for its own marker.
+ */
+async function existingCardData(abs) {
+  try {
+    const parsed = JSON.parse(await readFile(path.join(abs, WORKFLOW_FILE), 'utf8'))
+    return {
+      cards: Array.isArray(parsed.cards) ? parsed.cards : [],
+      archived: Array.isArray(parsed.archived) ? parsed.archived : [],
+    }
+  } catch {
+    return { cards: [], archived: [] }
+  }
 }
 
 /**
@@ -354,6 +410,122 @@ async function scaffoldWorkflow(abs, { description, columns, readyAgent }) {
  */
 async function scaffoldAgent(abs, { description }) {
   await writeFile(path.join(abs, AGENT_FILE), `${JSON.stringify({ description }, null, 2)}\n`)
+}
+
+// ---- workflow cards ----
+
+/**
+ * Reads an existing workflow.json for a real mutation, unlike the forgiving
+ * `existingCardData` — here a malformed file is a genuine error, not a
+ * silent "nothing to preserve".
+ */
+async function readWorkflowJson(abs) {
+  const raw = await readFile(path.join(abs, WORKFLOW_FILE), 'utf8')
+
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new HttpError(500, 'workflow.json is not valid JSON')
+  }
+
+  return {
+    description: typeof parsed.description === 'string' ? parsed.description : '',
+    columns: Array.isArray(parsed.columns) ? parsed.columns : [],
+    cards: Array.isArray(parsed.cards) ? parsed.cards : [],
+    archived: Array.isArray(parsed.archived) ? parsed.archived : [],
+  }
+}
+
+/** The one predicate that decides bot-vs-human — covers the fixed Ready
+ *  column and any custom bot column identically; Backlog/Done never carry
+ *  an `agent` key at all. */
+const isBotColumn = (column) => column?.agent != null
+
+/**
+ * Applies one card action, validated against the card's *current* column —
+ * found by position (Backlog is index 0, Done is the last index), the same
+ * rule scaffoldWorkflow's assembly and validColumn already rely on.
+ */
+function applyCardAction(data, cardId, action) {
+  const { columns, cards } = data
+  const index = cards.findIndex((card) => card.id === cardId)
+  if (index === -1) throw new HttpError(404, `No such card: ${cardId}`)
+
+  const card = cards[index]
+  const columnIdx = columns.findIndex((column) => column.name === card.column)
+  if (columnIdx === -1) {
+    // The card's column was renamed or removed out from under it — the
+    // accepted gap documented in CLAUDE.md. No action can be legal against a
+    // column that no longer exists.
+    throw new HttpError(400, `Card's column "${card.column}" no longer exists`)
+  }
+
+  switch (action) {
+    case 'move-up':
+      return { ...data, cards: swapWithNeighbor(cards, index, 'up', card.column) }
+    case 'move-down':
+      return { ...data, cards: swapWithNeighbor(cards, index, 'down', card.column) }
+    case 'move-right':
+      return { ...data, cards: moveRight(cards, index, columns, columnIdx) }
+    case 'delete':
+      if (columnIdx !== 0) throw new HttpError(400, 'Only a Backlog card can be deleted')
+      return { ...data, cards: cards.filter((_, i) => i !== index) }
+    case 'archive':
+      if (columnIdx !== columns.length - 1) throw new HttpError(400, 'Only a Done card can be archived')
+      return {
+        ...data,
+        cards: cards.filter((_, i) => i !== index),
+        archived: [...data.archived, card],
+      }
+  }
+}
+
+/** The nearest card sharing `columnName`, scanning up or down the full array
+ *  — within-column order is purely relative position among same-column
+ *  cards, since cards live in one flat array rather than nested per column. */
+function sameColumnNeighborIndex(cards, index, columnName, direction) {
+  const step = direction === 'up' ? -1 : 1
+  for (let i = index + step; i >= 0 && i < cards.length; i += step) {
+    if (cards[i].column === columnName) return i
+  }
+  return -1
+}
+
+function swapWithNeighbor(cards, index, direction, columnName) {
+  const neighbor = sameColumnNeighborIndex(cards, index, columnName, direction)
+  if (neighbor === -1) {
+    throw new HttpError(400, `No card ${direction === 'up' ? 'above' : 'below'} this one in its column`)
+  }
+
+  const next = [...cards]
+  ;[next[index], next[neighbor]] = [next[neighbor], next[index]]
+  return next
+}
+
+/** Moves a card into the next column by position, landing it at that
+ *  column's bottom — after its last existing card, or at the array's end if
+ *  the target has none yet. */
+function moveRight(cards, index, columns, columnIdx) {
+  if (isBotColumn(columns[columnIdx])) throw new HttpError(400, "A bot column's cards cannot be moved")
+
+  const target = columns[columnIdx + 1]
+  if (!target) throw new HttpError(400, 'There is no column to the right')
+
+  const card = { ...cards[index], column: target.name }
+  const withoutCard = cards.filter((_, i) => i !== index)
+
+  let insertAt = withoutCard.length
+  for (let i = withoutCard.length - 1; i >= 0; i--) {
+    if (withoutCard[i].column === target.name) {
+      insertAt = i + 1
+      break
+    }
+  }
+
+  const next = [...withoutCard]
+  next.splice(insertAt, 0, card)
+  return next
 }
 
 // ---- validation ----
@@ -442,21 +614,17 @@ function validColumns(input) {
   return input.map(validColumn)
 }
 
+/**
+ * A column's bot/human-ness is not stored separately — `agent != null` is
+ * the one predicate, everywhere (the fixed Ready column and any custom
+ * column alike); see `isBotColumn`. There is deliberately no `actor` field
+ * to keep in sync with it.
+ */
 function validColumn(entry) {
   const name = requiredText(entry?.name, 'column name')
   if (name.length > MAX_COLUMN_NAME_LENGTH) throw new HttpError(400, 'That column name is too long')
 
-  const actor = entry?.actor
-  if (actor !== 'bot' && actor !== 'human') {
-    throw new HttpError(400, '"actor" must be "bot" or "human"')
-  }
-
-  const agent = validAgentRef(entry?.agent)
-  if (actor === 'human' && agent !== null) {
-    throw new HttpError(400, 'A human column cannot have an agent')
-  }
-
-  return { name, actor, agent }
+  return { name, agent: validAgentRef(entry?.agent) }
 }
 
 /** An agent reference: absent or explicit `null` both mean "none". Shared by a
@@ -466,6 +634,23 @@ function validAgentRef(input) {
   if (value !== null && typeof value !== 'string') {
     throw new HttpError(400, '"agent" must be a string or null')
   }
+
+  return value
+}
+
+function validCardAction(input) {
+  if (!CARD_ACTIONS.includes(input)) {
+    throw new HttpError(400, `"action" must be one of: ${CARD_ACTIONS.join(', ')}`)
+  }
+
+  return input
+}
+
+function validCardId(input) {
+  const value = typeof input === 'string' ? input.trim() : ''
+
+  if (!value) throw new HttpError(400, '"cardId" is required')
+  if (value.length > MAX_NAME_LENGTH) throw new HttpError(400, 'That cardId is too long')
 
   return value
 }

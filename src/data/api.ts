@@ -15,12 +15,10 @@ export type ProjectDetails = {
 }
 
 /** One column a workflow's own creator added — the fixed Backlog/Ready/Done
- *  are never part of this: the server adds them unconditionally. */
+ *  are never part of this: the server adds them unconditionally. Bot vs.
+ *  human is not stored separately: `agent != null` means bot, everywhere. */
 export type CustomWorkflowColumn = {
   name: string
-  actor: 'bot' | 'human'
-  /** Only meaningful when `actor` is `'bot'`; the dropdown has nothing to
-   *  offer yet, so this stays `null` until agents exist. */
   agent: string | null
 }
 
@@ -28,8 +26,8 @@ export type NewWorkflowDetails = {
   name: string
   description: string
   columns: CustomWorkflowColumn[]
-  /** The fixed Ready column's own agent — unlike a custom column's, not gated
-   *  behind an actor toggle, since Ready is never a human column. */
+  /** The fixed Ready column's own agent — unlike a custom column's, it
+   *  cannot be left as "no agent", since Ready is never a human column. */
   readyAgent: string | null
 }
 
@@ -86,8 +84,37 @@ export const updateWorkflow = (path: string, edits: WorkflowEdits) =>
   )
 
 /** Where a workflow's saved data lives, for `fetchFile` to read when
- *  prefilling the edit dialog. */
+ *  prefilling the edit dialog, or loading its board. */
 export const workflowFilePath = (workflowPath: string) => `${workflowPath}/workflow.json`
+
+/** One column as the board sees it — `agent != null` is the one predicate
+ *  that decides bot-vs-human styling, for the fixed columns and any custom
+ *  one alike. */
+export type WorkflowColumn = {
+  name: string
+  agent: string | null
+}
+
+/** A card references its column by name, not id — the same no-id convention
+ *  columns themselves already follow. Renaming the column out from under it
+ *  is an accepted gap; see CLAUDE.md. */
+export type WorkflowCard = {
+  id: string
+  title: string
+  description: string
+  column: string
+}
+
+export type CardAction = 'move-up' | 'move-down' | 'move-right' | 'delete' | 'archive'
+
+const patchCard = (path: string, cardId: string, action: CardAction) =>
+  request<{ path: string }>('PATCH', '/workflow-cards', { path, cardId, action }).then(() => undefined)
+
+export const moveCardUp = (path: string, cardId: string) => patchCard(path, cardId, 'move-up')
+export const moveCardDown = (path: string, cardId: string) => patchCard(path, cardId, 'move-down')
+export const moveCardRight = (path: string, cardId: string) => patchCard(path, cardId, 'move-right')
+export const deleteCard = (path: string, cardId: string) => patchCard(path, cardId, 'delete')
+export const archiveCard = (path: string, cardId: string) => patchCard(path, cardId, 'archive')
 
 /** Rejects if the name is taken, which is what the dialog reports. */
 export const createAgent = (parent: string, details: NewAgentDetails) =>

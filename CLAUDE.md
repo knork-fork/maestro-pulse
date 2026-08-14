@@ -59,6 +59,8 @@ dependency-free Node API that owns the folder tree.
 | What a workflow is created/edited with, columns included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
 | What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
 | What an agent's own view renders — profile, dummy heartbeat/max-children/mission, sample pulse actions, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
+| A workflow's kanban board — columns, bot/human column styling, per-card move/delete/archive controls, and the read-only card detail modal | [src/components/KanbanBoard.tsx](src/components/KanbanBoard.tsx), [src/components/Column.tsx](src/components/Column.tsx), [src/components/Card.tsx](src/components/Card.tsx), [src/components/CardMoveMenu.tsx](src/components/CardMoveMenu.tsx), [src/components/CardDetailModal.tsx](src/components/CardDetailModal.tsx) |
+| A workflow board's own data — fetch, reload, and the per-card move/delete/archive mutations | [src/hooks/useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) |
 | Rename dialog / delete confirmation | [src/components/RenameDialog.tsx](src/components/RenameDialog.tsx), [src/components/ConfirmDialog.tsx](src/components/ConfirmDialog.tsx) |
 | Pending + error state for one user action | [src/hooks/useAsyncAction.ts](src/hooks/useAsyncAction.ts) |
 | Mirroring a Set to localStorage | [src/hooks/usePersistentSet.ts](src/hooks/usePersistentSet.ts) |
@@ -166,7 +168,13 @@ under an open view. A project's details cannot be edited after the fact, and
 renaming one does not revisit what was written into it. A workflow's own
 description/columns *are* editable after creation (unlike a project) — only
 its name is fixed; the same is true of an agent's description. Opening a
-workflow's board shows only its name; there is no kanban rendering yet.
+workflow's board now renders its cards (see
+[KanbanBoard.tsx](src/components/KanbanBoard.tsx)), but there is still no way
+to create a card through the UI at all - the only way to add one is a direct
+edit to `workflow.json`. A custom column renamed via
+[WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) after it has cards
+orphans them rather than migrating them, the same class of gap as a renamed
+project not revisiting what was written into it.
 Opening an agent's view shows a full profile card — its real `description`
 from `agent.json` alongside a heartbeat interval, a max-children limit, a
 mission statement, and a sample list of per-pulse actions — but only the name
@@ -208,11 +216,12 @@ A `workflow` is marked the same way a `project` is, one level down: right-clicki
 a project's `workflows` folder is how one is created, and the fixed leading/
 trailing columns (Backlog, Ready, … Done) a board always has are added by the
 API rather than sent by the client — see `scaffoldWorkflow` and `validColumns`
-in [server/index.mjs](server/index.mjs). The fixed Ready column alone also
-carries an agent reference (`readyAgent`, validated by `validAgentRef`) — an
-agent a `bot` column can be assigned to, so the dialog offers the same "choose
-an agent" field for Ready without gating it behind an actor toggle, since Ready
-is never a human column. Unlike a project, a workflow's own
+in [server/index.mjs](server/index.mjs). A column's bot/human-ness is not its
+own stored field — every column, fixed or custom, is a bot column exactly
+when its `agent` is non-null (`isBotColumn`), so the dialog offers the same
+"choose an agent, or leave it as Human" field everywhere; the fixed Ready
+column alone cannot be left on "Human", since it is never a human column.
+Unlike a project, a workflow's own
 content (`workflow.json`) can be overwritten after creation, through the same
 type-checked entry point that creates it; see `updateEntry`. Its name cannot —
 see [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx). Opening a
@@ -220,6 +229,21 @@ workflow's board is a synthetic selection, not a real file — see
 `workflowBoardPath`/`parseBoardPath` in [tree.ts](src/data/tree.ts) and where
 [MainPane.tsx](src/components/MainPane.tsx) checks for it before falling
 through to the file-view logic below.
+
+A workflow's `workflow.json` additionally holds `cards` and `archived`, each a
+flat array of `{ id, title, description, column }`, where `column` names a
+column by its `name` rather than an id - the same no-id convention columns
+themselves already follow (so a custom column renamed after it has cards
+orphans them; see "Not yet wired" above). Because `scaffoldWorkflow` fully
+rewrites the file on every description/columns edit, it reads and carries
+these two arrays through rather than assuming a brand-new workflow; see
+`existingCardData`. Every move/delete/archive is validated server-side
+against a column's fixed position (Backlog/Ready/Done are always index
+0/1/last) and its `agent` (non-null means bot) by `applyCardAction`, behind
+the narrow, type-checked `PATCH /api/workflow-cards` route; see
+`updateWorkflowCard` in [server/index.mjs](server/index.mjs). There is no
+endpoint that creates a card - seeding one requires editing `workflow.json`
+directly.
 
 An `agent` is marked and created the same way, one level down inside a
 project's `agents` folder instead — see `scaffoldAgent` in

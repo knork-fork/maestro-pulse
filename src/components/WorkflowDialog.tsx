@@ -5,7 +5,6 @@ import { workflowFilePath } from '../data/api'
 import type { TreeNode } from '../data/tree'
 import { useAsyncAction } from '../hooks/useAsyncAction'
 import { useFileContent } from '../hooks/useFileContent'
-import { classes } from './classes'
 import { Modal } from './Modal'
 
 /** Shown as plain UI copy for the pinned rows — the server adds the same
@@ -14,8 +13,10 @@ const FIXED_LEADING_LABELS = ['Backlog', 'Ready']
 const FIXED_TRAILING_LABEL = 'Done'
 
 /** A card being edited. `key` is independent of `name` so dragging and
- *  deleting stay stable while a name is blank or mid-edit. */
-type DraftColumn = { key: string; name: string; actor: 'bot' | 'human'; agent: string | null }
+ *  deleting stay stable while a name is blank or mid-edit. Bot vs. human is
+ *  not tracked separately — `agent != null` means bot, the same rule the
+ *  board applies everywhere (see `isBotColumn` in server/index.mjs). */
+type DraftColumn = { key: string; name: string; agent: string | null }
 
 /** An agent a bot column can be assigned to — scoped by the caller to those
  *  living under the same project as the workflow being edited. */
@@ -146,11 +147,10 @@ function parseWorkflowFile(
     const ready = parsed.columns[1] as { agent?: unknown }
     const readyAgent = typeof ready.agent === 'string' ? ready.agent : null
 
-    const custom = parsed.columns.slice(2, -1) as Array<{ name?: unknown; actor?: unknown; agent?: unknown }>
+    const custom = parsed.columns.slice(2, -1) as Array<{ name?: unknown; agent?: unknown }>
     const columns: DraftColumn[] = custom.map((column) => ({
       key: crypto.randomUUID(),
       name: typeof column.name === 'string' ? column.name : '',
-      actor: column.actor === 'bot' ? 'bot' : 'human',
       agent: typeof column.agent === 'string' ? column.agent : null,
     }))
 
@@ -202,9 +202,9 @@ function WorkflowForm({
 
   const trimmedName = name.trim()
   const trimmedDescription = description.trim()
-  /** Ready and every bot column offer a "choose an agent" field — none of
-   *  them can be left on that placeholder. */
-  const missingAgent = readyAgent === null || columns.some((column) => column.actor === 'bot' && column.agent === null)
+  /** Ready is never a human column, so — unlike a custom column, where "no
+   *  agent" is simply human — it alone cannot be left without one. */
+  const missingAgent = readyAgent === null
   const complete =
     trimmedDescription.length > 0 &&
     (!nameEditable || trimmedName.length > 0) &&
@@ -213,10 +213,6 @@ function WorkflowForm({
 
   const updateColumn = (key: string, patch: Partial<DraftColumn>) =>
     setColumns((prev) => prev.map((column) => (column.key === key ? { ...column, ...patch } : column)))
-
-  const setActor = (key: string, actor: DraftColumn['actor']) =>
-    // Leaving a bot card clears its agent immediately, not just at submit.
-    updateColumn(key, actor === 'human' ? { actor, agent: null } : { actor })
 
   /**
    * Focuses the new card's name field, so pressing Enter to add one lets you
@@ -227,7 +223,7 @@ function WorkflowForm({
   const addColumn = () => {
     const key = crypto.randomUUID()
     flushSync(() => {
-      setColumns((prev) => [...prev, { key, name: '', actor: 'human', agent: null }])
+      setColumns((prev) => [...prev, { key, name: '', agent: null }])
     })
     nameInputs.current.get(key)?.focus()
   }
@@ -258,8 +254,7 @@ function WorkflowForm({
         description: trimmedDescription,
         columns: columns.map((column) => ({
           name: column.name.trim(),
-          actor: column.actor,
-          agent: column.actor === 'bot' ? column.agent : null,
+          agent: column.agent,
         })),
         readyAgent,
       }),
@@ -366,37 +361,20 @@ function WorkflowForm({
                   }}
                 />
 
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={column.actor === 'bot'}
-                  aria-label={`${column.name || 'Column'} is ${column.actor}`}
-                  className={classes(['column-card__switch', column.actor === 'bot' && 'column-card__switch--bot'])}
+                <select
+                  className="modal__input column-card__agent"
+                  aria-label="Agent"
                   disabled={pending}
-                  onClick={() => setActor(column.key, column.actor === 'bot' ? 'human' : 'bot')}
+                  value={column.agent ?? ''}
+                  onChange={(event) => updateColumn(column.key, { agent: event.target.value || null })}
                 >
-                  <span>Human</span>
-                  <span>Bot</span>
-                </button>
-
-                {column.actor === 'bot' && (
-                  <select
-                    className="modal__input column-card__agent"
-                    aria-label="Agent"
-                    disabled={pending}
-                    value={column.agent ?? ''}
-                    onChange={(event) => updateColumn(column.key, { agent: event.target.value || null })}
-                  >
-                    <option value="" disabled>
-                      {availableAgents.length > 0 ? 'Choose an agent' : 'No agents yet'}
+                  <option value="">Human (no agent)</option>
+                  {availableAgents.map((agent) => (
+                    <option key={agent.path} value={agent.path}>
+                      {agent.name}
                     </option>
-                    {availableAgents.map((agent) => (
-                      <option key={agent.path} value={agent.path}>
-                        {agent.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                  ))}
+                </select>
 
                 <button
                   type="button"

@@ -17,10 +17,22 @@ import type { FileViewProps } from './registry'
 export function MarkdownView({ content }: FileViewProps) {
   return (
     <article className="markdown">
-      <Markdown remarkPlugins={[remarkGfm]} components={{ a: Link, img: Image }}>
-        {content}
-      </Markdown>
+      <SafeMarkdown content={content} />
     </article>
+  )
+}
+
+/**
+ * The renderer itself, without the file-view wrapper — for markdown that
+ * isn't a tree file (e.g. a kanban card's description), which has no
+ * `FileContext` to satisfy `FileViewProps`. Same safety story as above: no
+ * `rehype-raw`, no loosened `urlTransform`.
+ */
+export function SafeMarkdown({ content }: { content: string }) {
+  return (
+    <Markdown remarkPlugins={[remarkGfm]} components={{ a: Link, img: Image }}>
+      {content}
+    </Markdown>
   )
 }
 

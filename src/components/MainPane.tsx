@@ -4,6 +4,7 @@ import { useFileContent } from '../hooks/useFileContent'
 import type { FileContext, FileView } from '../views/registry'
 import { fileContext, viewFor } from '../views/registry'
 import { AgentView } from './AgentView'
+import { KanbanBoard } from './KanbanBoard'
 
 type Props = {
   nodes: TreeNode[]
@@ -28,7 +29,7 @@ export function MainPane({ nodes, selectedPath }: Props) {
     if (board && board.node.type === 'workflow') {
       return (
         <main className="main">
-          <div className="board-placeholder">{board.node.name}</div>
+          <KanbanBoard key={board.node.path} path={board.node.path} name={board.node.name} />
         </main>
       )
     }
