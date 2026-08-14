@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ROOT_PATH } from '../data/api'
 import type { CreatableType, TreeNode } from '../data/tree'
+import { expandablePaths, filterTree } from '../data/tree'
 import type { ProjectTreeState } from '../hooks/useProjectTree'
 import { ConfirmDialog } from './ConfirmDialog'
 import { NewMenu } from './NewMenu'
@@ -28,6 +29,47 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
   const [creatingIn, setCreatingIn] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<TreeNode | null>(null)
   const [deleting, setDeleting] = useState<TreeNode | null>(null)
+  const [filterQuery, setFilterQuery] = useState('')
+  /**
+   * Paths the user has manually collapsed while a filter is active. A filter
+   * defaults every match open, since nothing else could reveal one nested under
+   * a folder that was never expanded — this is what lets that default be undone
+   * per-row without touching the real, persisted `expanded` set underneath.
+   */
+  const [filterCollapsed, setFilterCollapsed] = useState<Set<string>>(new Set())
+
+  const filteredNodes = useMemo(() => filterTree(tree.nodes, filterQuery), [tree.nodes, filterQuery])
+  const filtering = filterQuery.trim() !== ''
+
+  // Only ever consulted while filtering, so clearing the filter falls straight
+  // back to `tree.expanded` exactly as the user left it.
+  const effectiveExpanded = useMemo(
+    () =>
+      filtering
+        ? new Set(expandablePaths(filteredNodes).filter((path) => !filterCollapsed.has(path)))
+        : tree.expanded,
+    [filtering, filteredNodes, filterCollapsed, tree.expanded],
+  )
+
+  const handleFilterChange = (value: string) => {
+    setFilterQuery(value)
+    // A cleared filter starts its next session fresh, open by default again.
+    if (value.trim() === '') setFilterCollapsed(new Set())
+  }
+
+  const handleToggle = (path: string) => {
+    if (!filtering) {
+      tree.toggle(path)
+      return
+    }
+
+    setFilterCollapsed((current) => {
+      const next = new Set(current)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }
 
   const startCreate = (parentPath: string, type: CreatableType) => {
     if (type === 'project') {
@@ -75,19 +117,21 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
           className="filter-input"
           placeholder="Filter projects…"
           aria-label="Filter projects"
+          value={filterQuery}
+          onChange={(event) => handleFilterChange(event.target.value)}
         />
       </div>
 
       <nav className="tree" aria-label="Project tree">
         {tree.error && <p className="tree__error" role="alert">{tree.error}</p>}
 
-        {tree.nodes.length > 0 || draft ? (
+        {filteredNodes.length > 0 || draft ? (
           <ProjectTree
-            nodes={tree.nodes}
-            expanded={tree.expanded}
+            nodes={filteredNodes}
+            expanded={effectiveExpanded}
             selectedPath={tree.selectedPath}
             draft={draft}
-            onToggle={tree.toggle}
+            onToggle={handleToggle}
             onSelect={tree.select}
             onCreate={startCreate}
             onCommitDraft={commitDraft}
@@ -96,7 +140,15 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
             onRequestDelete={setDeleting}
           />
         ) : (
-          !tree.error && <p className="empty-state">{tree.loaded ? 'No projects added' : 'Loading…'}</p>
+          !tree.error && (
+            <p className="empty-state">
+              {!tree.loaded
+                ? 'Loading…'
+                : tree.nodes.length === 0
+                  ? 'No projects added'
+                  : 'No projects match your filter'}
+            </p>
+          )
         )}
       </nav>
 

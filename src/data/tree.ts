@@ -75,3 +75,38 @@ export const locate = (
 
   return found ? { node: found, parent } : null
 }
+
+/**
+ * Keeps only the nodes that match `query` by name, or lead to one that does.
+ *
+ * Only a `folder`'s children are organization — the same scope
+ * `acceptsNewChildren` draws the line at. Recursion follows that line exactly:
+ * a `folder` is searched into, but a `project` or a plain `directory`/`file` a
+ * user dropped in by hand is judged by its own name alone, and if it matches,
+ * everything under it is carried through untouched. That's what keeps
+ * `README.md` and friends showing under a matching project, and is also why a
+ * non-matching plain subdirectory's own contents are never individually
+ * re-tested — they are content, not organization, one level past the folder
+ * that holds them.
+ */
+export const filterTree = (nodes: TreeNode[], query: string): TreeNode[] => {
+  const q = query.trim().toLowerCase()
+  return q ? filterChildren(nodes, q) : nodes
+}
+
+const filterChildren = (nodes: TreeNode[], q: string): TreeNode[] =>
+  nodes.flatMap((node): TreeNode[] => {
+    const matches = node.name.toLowerCase().includes(q)
+    if (node.type !== 'folder') return matches ? [node] : []
+
+    const children = filterChildren(node.children, q)
+    return matches || children.length > 0 ? [{ ...node, children }] : []
+  })
+
+/**
+ * Every path in `nodes` that can be expanded, so a filtered tree can default to
+ * showing its matches without anyone having manually expanded the folders
+ * leading to them.
+ */
+export const expandablePaths = (nodes: TreeNode[]): string[] =>
+  nodes.flatMap((node) => (isExpandable(node) ? [node.path, ...expandablePaths(childrenOf(node))] : []))

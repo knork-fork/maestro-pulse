@@ -138,10 +138,25 @@ Menus are portalled to `<body>` and positioned from a viewport anchor by
 otherwise clip them; that is also why they dismiss on scroll rather than
 following the anchor.
 
+The sidebar's filter is local UI state in
+[ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx), not part of the tree
+hook: it narrows the already-loaded `nodes` client-side via `filterTree` in
+[tree.ts](src/data/tree.ts) rather than reloading. Its scope is organizational
+only — a `folder`'s contents are matched and can be filtered out, but a
+matching `project`'s own contents always come along whole, never individually
+tested. While a filter is active, [ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx)
+hands [ProjectTree.tsx](src/components/ProjectTree.tsx) a computed expanded set
+— every expandable path the filter kept, minus whatever the user has manually
+collapsed in that filtering session — rather than the tree hook's own
+`expanded`, so a match defaults to visible without anyone having expanded its
+folders, but a row can still be collapsed like normal. `ProjectTree.tsx` itself
+stays unaware any of this is happening; it just renders whatever `nodes` and
+`expanded` it is handed, same as always. Clearing the filter reverts to
+`tree.expanded` untouched.
+
 ### Not yet wired
 
-The filter input is an inert placeholder. Only files a view claims can be opened
-at all — every other file row is inert. Nothing serves a project's raw bytes, so
+Only files a view claims can be opened at all — every other file row is inert. Nothing serves a project's raw bytes, so
 relative images and links inside a rendered file cannot resolve and are shown as
 unresolved rather than followed. Nothing re-reads a file that changes on disk
 under an open view. A project's details cannot be edited after the fact, and
