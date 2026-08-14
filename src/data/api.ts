@@ -28,12 +28,16 @@ export type NewWorkflowDetails = {
   name: string
   description: string
   columns: CustomWorkflowColumn[]
+  /** The fixed Ready column's own agent — unlike a custom column's, not gated
+   *  behind an actor toggle, since Ready is never a human column. */
+  readyAgent: string | null
 }
 
 /** What editing a workflow can change. Its name is fixed after creation. */
 export type WorkflowEdits = {
   description: string
   columns: CustomWorkflowColumn[]
+  readyAgent: string | null
 }
 
 export type NewAgentDetails = {

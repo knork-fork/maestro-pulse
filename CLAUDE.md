@@ -202,7 +202,11 @@ A `workflow` is marked the same way a `project` is, one level down: right-clicki
 a project's `workflows` folder is how one is created, and the fixed leading/
 trailing columns (Backlog, Ready, … Done) a board always has are added by the
 API rather than sent by the client — see `scaffoldWorkflow` and `validColumns`
-in [server/index.mjs](server/index.mjs). Unlike a project, a workflow's own
+in [server/index.mjs](server/index.mjs). The fixed Ready column alone also
+carries an agent reference (`readyAgent`, validated by `validAgentRef`) — an
+agent a `bot` column can be assigned to, so the dialog offers the same "choose
+an agent" field for Ready without gating it behind an actor toggle, since Ready
+is never a human column. Unlike a project, a workflow's own
 content (`workflow.json`) can be overwritten after creation, through the same
 type-checked entry point that creates it; see `updateEntry`. Its name cannot —
 see [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx). Opening a

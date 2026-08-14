@@ -129,6 +129,7 @@ async function createEntry(req) {
         ? {
             description: requiredText(body.description, 'description'),
             columns: validColumns(body.columns),
+            readyAgent: validAgentRef(body.readyAgent),
           }
         : type === 'agent'
           ? { description: requiredText(body.description, 'description') }
@@ -190,6 +191,7 @@ async function updateEntry(req) {
         ? scaffoldWorkflow(abs, {
             description: requiredText(body.description, 'description'),
             columns: validColumns(body.columns),
+            readyAgent: validAgentRef(body.readyAgent),
           })
         : scaffoldAgent(abs, { description: requiredText(body.description, 'description') }),
     `No such ${type}: ${target}`,
@@ -330,9 +332,10 @@ async function scaffoldProject(abs, { name, location, description }) {
  * existing one — the "wrap the client's columns with the fixed ones" rule
  * lives here exactly once so create and edit can never drift apart on it.
  */
-async function scaffoldWorkflow(abs, { description, columns }) {
+async function scaffoldWorkflow(abs, { description, columns, readyAgent }) {
   const full = [
-    ...FIXED_LEADING_COLUMNS.map((name) => ({ name })),
+    { name: FIXED_LEADING_COLUMNS[0] },
+    { name: FIXED_LEADING_COLUMNS[1], agent: readyAgent },
     ...columns,
     { name: FIXED_TRAILING_COLUMN },
   ]
@@ -448,15 +451,23 @@ function validColumn(entry) {
     throw new HttpError(400, '"actor" must be "bot" or "human"')
   }
 
-  const agent = entry?.agent ?? null
+  const agent = validAgentRef(entry?.agent)
   if (actor === 'human' && agent !== null) {
     throw new HttpError(400, 'A human column cannot have an agent')
   }
-  if (actor === 'bot' && agent !== null && typeof agent !== 'string') {
+
+  return { name, actor, agent }
+}
+
+/** An agent reference: absent or explicit `null` both mean "none". Shared by a
+ *  custom column's `agent` and the fixed Ready column's own. */
+function validAgentRef(input) {
+  const value = input ?? null
+  if (value !== null && typeof value !== 'string') {
     throw new HttpError(400, '"agent" must be a string or null')
   }
 
-  return { name, actor, agent }
+  return value
 }
 
 function requiredText(input, field) {

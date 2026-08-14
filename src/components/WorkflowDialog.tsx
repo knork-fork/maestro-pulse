@@ -60,6 +60,7 @@ export function WorkflowDialog(props: Props) {
       initialName=""
       initialDescription=""
       initialColumns={[]}
+      initialReadyAgent={null}
       availableAgents={props.availableAgents}
       onCancel={props.onCancel}
       onSubmit={(values) => props.onCreate(values)}
@@ -116,9 +117,12 @@ function EditWorkflowDialog({
       initialName={node.name}
       initialDescription={parsed.description}
       initialColumns={parsed.columns}
+      initialReadyAgent={parsed.readyAgent}
       availableAgents={availableAgents}
       onCancel={onCancel}
-      onSubmit={(values) => onSave({ description: values.description, columns: values.columns })}
+      onSubmit={(values) =>
+        onSave({ description: values.description, columns: values.columns, readyAgent: values.readyAgent })
+      }
     />
   )
 }
@@ -130,12 +134,17 @@ function EditWorkflowDialog({
  * that shape (hand-edited, or from a future format) is treated as unreadable
  * rather than guessed at.
  */
-function parseWorkflowFile(content: string): { description: string; columns: DraftColumn[] } | null {
+function parseWorkflowFile(
+  content: string,
+): { description: string; columns: DraftColumn[]; readyAgent: string | null } | null {
   try {
     const parsed = JSON.parse(content) as { description?: unknown; columns?: unknown }
     if (typeof parsed.description !== 'string' || !Array.isArray(parsed.columns) || parsed.columns.length < 3) {
       return null
     }
+
+    const ready = parsed.columns[1] as { agent?: unknown }
+    const readyAgent = typeof ready.agent === 'string' ? ready.agent : null
 
     const custom = parsed.columns.slice(2, -1) as Array<{ name?: unknown; actor?: unknown; agent?: unknown }>
     const columns: DraftColumn[] = custom.map((column) => ({
@@ -145,7 +154,7 @@ function parseWorkflowFile(content: string): { description: string; columns: Dra
       agent: typeof column.agent === 'string' ? column.agent : null,
     }))
 
-    return { description: parsed.description, columns }
+    return { description: parsed.description, columns, readyAgent }
   } catch {
     return null
   }
@@ -158,9 +167,15 @@ type FormProps = {
   initialName: string
   initialDescription: string
   initialColumns: DraftColumn[]
+  initialReadyAgent: string | null
   availableAgents: AvailableAgent[]
   onCancel: () => void
-  onSubmit: (values: { name: string; description: string; columns: CustomWorkflowColumn[] }) => Promise<void>
+  onSubmit: (values: {
+    name: string
+    description: string
+    columns: CustomWorkflowColumn[]
+    readyAgent: string | null
+  }) => Promise<void>
 }
 
 function WorkflowForm({
@@ -169,6 +184,7 @@ function WorkflowForm({
   initialName,
   initialDescription,
   initialColumns,
+  initialReadyAgent,
   availableAgents,
   onCancel,
   onSubmit,
@@ -176,6 +192,7 @@ function WorkflowForm({
   const [name, setName] = useState(initialName)
   const [description, setDescription] = useState(initialDescription)
   const [columns, setColumns] = useState<DraftColumn[]>(initialColumns)
+  const [readyAgent, setReadyAgent] = useState<string | null>(initialReadyAgent)
   const { pending, error, run } = useAsyncAction()
   const fieldId = useId()
   /** Which card is mid-drag — a ref, since it drives no render of its own. */
@@ -185,10 +202,14 @@ function WorkflowForm({
 
   const trimmedName = name.trim()
   const trimmedDescription = description.trim()
+  /** Ready and every bot column offer a "choose an agent" field — none of
+   *  them can be left on that placeholder. */
+  const missingAgent = readyAgent === null || columns.some((column) => column.actor === 'bot' && column.agent === null)
   const complete =
     trimmedDescription.length > 0 &&
     (!nameEditable || trimmedName.length > 0) &&
-    columns.every((column) => column.name.trim().length > 0)
+    columns.every((column) => column.name.trim().length > 0) &&
+    !missingAgent
 
   const updateColumn = (key: string, patch: Partial<DraftColumn>) =>
     setColumns((prev) => prev.map((column) => (column.key === key ? { ...column, ...patch } : column)))
@@ -240,6 +261,7 @@ function WorkflowForm({
           actor: column.actor,
           agent: column.actor === 'bot' ? column.agent : null,
         })),
+        readyAgent,
       }),
     )
   }
@@ -285,7 +307,27 @@ function WorkflowForm({
 
           <ul className="columns">
             <li className="column-card column-card--fixed">{FIXED_LEADING_LABELS[0]}</li>
-            <li className="column-card column-card--fixed">{FIXED_LEADING_LABELS[1]}</li>
+
+            <li className="column-card column-card--fixed">
+              <span className="column-card__name">{FIXED_LEADING_LABELS[1]}</span>
+
+              <select
+                className="modal__input column-card__agent"
+                aria-label="Agent"
+                disabled={pending}
+                value={readyAgent ?? ''}
+                onChange={(event) => setReadyAgent(event.target.value || null)}
+              >
+                <option value="" disabled>
+                  {availableAgents.length > 0 ? 'Choose an agent' : 'No agents yet'}
+                </option>
+                {availableAgents.map((agent) => (
+                  <option key={agent.path} value={agent.path}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+            </li>
 
             {columns.map((column) => (
               <li
@@ -375,6 +417,10 @@ function WorkflowForm({
           <button type="button" className="btn" disabled={pending} onClick={addColumn}>
             Add card
           </button>
+
+          {missingAgent && availableAgents.length === 0 && (
+            <p className="modal__error">Create an agent for this project first, then choose it here.</p>
+          )}
         </div>
 
         {error && <p className="modal__error">{error}</p>}
