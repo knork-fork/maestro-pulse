@@ -41,7 +41,7 @@ const PROJECT_SUBDIRECTORIES = ['agents', 'workflows', 'tools']
  * without recomputing it.
  */
 const WORKFLOW_FILE = 'workflow.json'
-const FIXED_LEADING_COLUMNS = ['Backlog', 'Ready']
+const FIXED_LEADING_COLUMN = 'Backlog'
 const FIXED_TRAILING_COLUMN = 'Done'
 const MAX_WORKFLOW_COLUMNS = 20
 const MAX_COLUMN_NAME_LENGTH = 60
@@ -138,7 +138,6 @@ async function createEntry(req) {
         ? {
             description: requiredText(body.description, 'description'),
             columns: validColumns(body.columns),
-            readyAgent: validAgentRef(body.readyAgent),
           }
         : type === 'agent'
           ? { description: requiredText(body.description, 'description') }
@@ -200,7 +199,6 @@ async function updateEntry(req) {
         ? scaffoldWorkflow(abs, {
             description: requiredText(body.description, 'description'),
             columns: validColumns(body.columns),
-            readyAgent: validAgentRef(body.readyAgent),
           })
         : scaffoldAgent(abs, { description: requiredText(body.description, 'description') }),
     `No such ${type}: ${target}`,
@@ -368,13 +366,8 @@ async function scaffoldProject(abs, { name, location, description }) {
  * existing one — the "wrap the client's columns with the fixed ones" rule
  * lives here exactly once so create and edit can never drift apart on it.
  */
-async function scaffoldWorkflow(abs, { description, columns, readyAgent }) {
-  const full = [
-    { name: FIXED_LEADING_COLUMNS[0] },
-    { name: FIXED_LEADING_COLUMNS[1], agent: readyAgent },
-    ...columns,
-    { name: FIXED_TRAILING_COLUMN },
-  ]
+async function scaffoldWorkflow(abs, { description, columns }) {
+  const full = [{ name: FIXED_LEADING_COLUMN }, ...columns, { name: FIXED_TRAILING_COLUMN }]
   const { cards, archived } = await existingCardData(abs)
 
   await writeFile(
@@ -437,10 +430,9 @@ async function readWorkflowJson(abs) {
   }
 }
 
-/** The one predicate that decides bot-vs-human — covers the fixed Ready
- *  column and any custom bot column identically; Backlog/Done never carry
- *  an `agent` key at all. */
-const isBotColumn = (column) => column?.agent != null
+/** The one predicate that decides bot-vs-human — covers Ready, Doing and any
+ *  custom bot column identically; Backlog/Done never carry a `bot` key at all. */
+const isBotColumn = (column) => column?.bot === true
 
 /**
  * Applies one card action, validated against the card's *current* column —
@@ -602,7 +594,7 @@ function hostPath(input) {
 }
 
 /**
- * The client's custom columns only — the fixed leading/trailing ones are never
+ * The client's own columns only — the fixed leading/trailing ones are never
  * sent over the wire, since `scaffoldWorkflow` adds them unconditionally.
  */
 function validColumns(input) {
@@ -615,27 +607,14 @@ function validColumns(input) {
 }
 
 /**
- * A column's bot/human-ness is not stored separately — `agent != null` is
- * the one predicate, everywhere (the fixed Ready column and any custom
- * column alike); see `isBotColumn`. There is deliberately no `actor` field
- * to keep in sync with it.
+ * A column's bot/human-ness is stored as its own explicit `bot` key — see
+ * `isBotColumn`.
  */
 function validColumn(entry) {
   const name = requiredText(entry?.name, 'column name')
   if (name.length > MAX_COLUMN_NAME_LENGTH) throw new HttpError(400, 'That column name is too long')
 
-  return { name, agent: validAgentRef(entry?.agent) }
-}
-
-/** An agent reference: absent or explicit `null` both mean "none". Shared by a
- *  custom column's `agent` and the fixed Ready column's own. */
-function validAgentRef(input) {
-  const value = input ?? null
-  if (value !== null && typeof value !== 'string') {
-    throw new HttpError(400, '"agent" must be a string or null')
-  }
-
-  return value
+  return { name, bot: entry?.bot === true }
 }
 
 function validCardAction(input) {

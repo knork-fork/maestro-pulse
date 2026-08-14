@@ -19,11 +19,11 @@ type Props = {
 }
 
 /**
- * One column: bot vs. human is the single `agent != null` predicate, which
- * covers the fixed Ready column and any custom bot column identically.
- * Per-card move legality is computed here from this column's own card order
- * — for disabling buttons only; the server independently re-derives and
- * enforces the same rule on every request.
+ * One column: bot vs. human is the single `bot` field, which covers Ready,
+ * Doing and any custom bot column identically. Per-card move legality is
+ * computed here from this column's own card order — for disabling buttons
+ * only; the server independently re-derives and enforces the same rule on
+ * every request.
  */
 export function Column({
   column,
@@ -37,10 +37,7 @@ export function Column({
   onMoveDown,
   onMoveRight,
 }: Props) {
-  const isBot = column.agent != null
-  // An agent's display name is its directory name, which is also the last
-  // segment of its path — no separate lookup needed for the card avatar.
-  const agentName = column.agent ? column.agent.split('/').pop() || column.agent : null
+  const isBot = column.bot
 
   return (
     <div className={classes(['column', isBot ? 'column--bot' : 'column--human'])}>
@@ -58,7 +55,6 @@ export function Column({
           <Card
             key={card.id}
             card={card}
-            agentName={agentName}
             isBacklog={isFirst}
             isDone={isLast}
             canMoveUp={index > 0}

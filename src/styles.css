@@ -1019,7 +1019,7 @@ body {
   background: var(--input-bg);
 }
 
-/* Backlog, Ready and Done: shown for shape, not offered for editing. */
+/* Backlog and Done: shown for shape, not offered for editing. */
 .column-card--fixed {
   color: var(--text-dim);
   cursor: default;
@@ -1030,7 +1030,14 @@ body {
 
 .column-card__name { flex: 1; }
 
-.column-card__agent { flex: none; width: 140px; }
+.column-card__bot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
 
 .column-card__remove {
   flex: none;

@@ -14,28 +14,24 @@ export type ProjectDetails = {
   description: string
 }
 
-/** One column a workflow's own creator added — the fixed Backlog/Ready/Done
- *  are never part of this: the server adds them unconditionally. Bot vs.
- *  human is not stored separately: `agent != null` means bot, everywhere. */
+/** One column a workflow's own creator added — the fixed Backlog/Done are
+ *  never part of this: the server adds them unconditionally. Ready and Doing
+ *  are ordinary columns like any other, just seeded by default. */
 export type CustomWorkflowColumn = {
   name: string
-  agent: string | null
+  bot: boolean
 }
 
 export type NewWorkflowDetails = {
   name: string
   description: string
   columns: CustomWorkflowColumn[]
-  /** The fixed Ready column's own agent — unlike a custom column's, it
-   *  cannot be left as "no agent", since Ready is never a human column. */
-  readyAgent: string | null
 }
 
 /** What editing a workflow can change. Its name is fixed after creation. */
 export type WorkflowEdits = {
   description: string
   columns: CustomWorkflowColumn[]
-  readyAgent: string | null
 }
 
 export type NewAgentDetails = {
@@ -87,22 +83,24 @@ export const updateWorkflow = (path: string, edits: WorkflowEdits) =>
  *  prefilling the edit dialog, or loading its board. */
 export const workflowFilePath = (workflowPath: string) => `${workflowPath}/workflow.json`
 
-/** One column as the board sees it — `agent != null` is the one predicate
- *  that decides bot-vs-human styling, for the fixed columns and any custom
- *  one alike. */
+/** One column as the board sees it — `bot` is the one field that decides
+ *  bot-vs-human styling, for Backlog/Done and any ordinary column alike. */
 export type WorkflowColumn = {
   name: string
-  agent: string | null
+  bot: boolean
 }
 
 /** A card references its column by name, not id — the same no-id convention
  *  columns themselves already follow. Renaming the column out from under it
- *  is an accepted gap; see CLAUDE.md. */
+ *  is an accepted gap; see CLAUDE.md. `assigned` is purely cosmetic — an
+ *  agent name (for now) shown as the card's avatar seed; `null`/absent shows
+ *  no avatar at all. */
 export type WorkflowCard = {
   id: string
   title: string
   description: string
   column: string
+  assigned: string | null
 }
 
 export type CardAction = 'move-up' | 'move-down' | 'move-right' | 'delete' | 'archive'

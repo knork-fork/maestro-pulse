@@ -172,10 +172,10 @@ its name is fixed; the same is true of an agent's description. Opening a
 workflow's board now renders its cards (see
 [KanbanBoard.tsx](src/components/KanbanBoard.tsx)), but there is still no way
 to create a card through the UI at all - the only way to add one is a direct
-edit to `workflow.json`. A custom column renamed via
-[WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) after it has cards
-orphans them rather than migrating them, the same class of gap as a renamed
-project not revisiting what was written into it.
+edit to `workflow.json`. Any editable column (Ready, Doing, or a custom one)
+renamed via [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) after it
+has cards orphans them rather than migrating them, the same class of gap as a
+renamed project not revisiting what was written into it.
 Opening an agent's view shows a full profile card — its real `description`
 from `agent.json` alongside a heartbeat interval, a max-children limit, a
 mission statement, and a sample list of per-pulse actions — but only the name
@@ -215,14 +215,15 @@ to edit afterwards.
 
 A `workflow` is marked the same way a `project` is, one level down: right-clicking
 a project's `workflows` folder is how one is created, and the fixed leading/
-trailing columns (Backlog, Ready, … Done) a board always has are added by the
-API rather than sent by the client — see `scaffoldWorkflow` and `validColumns`
-in [server/index.mjs](server/index.mjs). A column's bot/human-ness is not its
-own stored field — every column, fixed or custom, is a bot column exactly
-when its `agent` is non-null (`isBotColumn`), so the dialog offers the same
-"choose an agent, or leave it as Human" field everywhere; the fixed Ready
-column alone cannot be left on "Human", since it is never a human column.
-Unlike a project, a workflow's own
+trailing columns (Backlog … Done) a board always has are added by the API
+rather than sent by the client — see `scaffoldWorkflow` and `validColumns` in
+[server/index.mjs](server/index.mjs). Only Backlog (first) and Done (last)
+are fixed; Ready and Doing are ordinary columns like any custom one, just
+seeded by [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) as a new
+workflow's starting defaults (both bot-column by default) — all three can be
+renamed, reordered, or deleted like any other middle column. A column's
+bot/human-ness is its own explicit `bot` boolean — every column, fixed or not,
+is a bot column exactly when `bot` is `true` (`isBotColumn`). Unlike a project, a workflow's own
 content (`workflow.json`) can be overwritten after creation, through the same
 type-checked entry point that creates it; see `updateEntry`. Its name cannot —
 see [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx). Opening a
@@ -232,16 +233,20 @@ workflow's board is a synthetic selection, not a real file — see
 through to the file-view logic below.
 
 A workflow's `workflow.json` additionally holds `cards` and `archived`, each a
-flat array of `{ id, title, description, column }`, where `column` names a
-column by its `name` rather than an id - the same no-id convention columns
-themselves already follow (so a custom column renamed after it has cards
-orphans them; see "Not yet wired" above). Because `scaffoldWorkflow` fully
+flat array of `{ id, title, description, column, assigned }`, where `column`
+names a column by its `name` rather than an id - the same no-id convention
+columns themselves already follow (so a custom column renamed after it has
+cards orphans them; see "Not yet wired" above). `assigned` is a card's own
+field, purely cosmetic — an agent name (for now), never checked against real
+agents — and is the only thing that decides whether a card shows an avatar at
+all, independent of whether its column is a bot column; see `assigned` in
+[Card.tsx](src/components/Card.tsx). Because `scaffoldWorkflow` fully
 rewrites the file on every description/columns edit, it reads and carries
 these two arrays through rather than assuming a brand-new workflow; see
 `existingCardData`. Every move/delete/archive is validated server-side
-against a column's fixed position (Backlog/Ready/Done are always index
-0/1/last) and its `agent` (non-null means bot) by `applyCardAction`, behind
-the narrow, type-checked `PATCH /api/workflow-cards` route; see
+against a column's fixed position (Backlog/Done are always index 0/last) and
+its `bot` flag by `applyCardAction`, behind the narrow, type-checked
+`PATCH /api/workflow-cards` route; see
 `updateWorkflowCard` in [server/index.mjs](server/index.mjs). There is no
 endpoint that creates a card - seeding one requires editing `workflow.json`
 directly.
@@ -254,10 +259,11 @@ a workflow's columns, so its own content (`agent.json`) is just a description,
 editable the same narrow way through `updateEntry`; its name is likewise
 fixed. Opening an agent's view is a synthetic selection mirroring a workflow's
 board — see `agentViewPath`/`parseAgentViewPath` in
-[tree.ts](src/data/tree.ts). A workflow's bot columns can be assigned one of
-the agents living under the same project; [ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx)
-computes that list from the already-loaded tree (there is no dedicated list
-endpoint) and hands it to [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx).
+[tree.ts](src/data/tree.ts). A card's `assigned` is not tied to a real agent
+entry — it is free text, never checked against the `agents` folder or any
+list of existing agents; there is no UI to set it yet, since there is no
+create/edit-card UI at all (seeding one requires a direct `workflow.json`
+edit, same as above).
 
 A file's contents cross the wire as text wrapped in JSON, because the API has no
 non-JSON response path. The read is capped and refuses anything that is not a

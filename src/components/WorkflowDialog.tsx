@@ -8,31 +8,25 @@ import { useFileContent } from '../hooks/useFileContent'
 import { Modal } from './Modal'
 
 /** Shown as plain UI copy for the pinned rows — the server adds the same
- *  three, unconditionally, in `scaffoldWorkflow`. */
-const FIXED_LEADING_LABELS = ['Backlog', 'Ready']
+ *  two, unconditionally, in `scaffoldWorkflow`. */
+const FIXED_LEADING_LABEL = 'Backlog'
 const FIXED_TRAILING_LABEL = 'Done'
 
-/** A card being edited. `key` is independent of `name` so dragging and
+/** A column being edited. `key` is independent of `name` so dragging and
  *  deleting stay stable while a name is blank or mid-edit. Bot vs. human is
- *  not tracked separately — `agent != null` means bot, the same rule the
- *  board applies everywhere (see `isBotColumn` in server/index.mjs). */
-type DraftColumn = { key: string; name: string; agent: string | null }
-
-/** An agent a bot column can be assigned to — scoped by the caller to those
- *  living under the same project as the workflow being edited. */
-export type AvailableAgent = { name: string; path: string }
+ *  the explicit `bot` field, the same one the board applies everywhere (see
+ *  `isBotColumn` in server/index.mjs). */
+type DraftColumn = { key: string; name: string; bot: boolean }
 
 type Props =
   | {
       mode: 'create'
-      availableAgents: AvailableAgent[]
       onCreate: (details: NewWorkflowDetails) => Promise<void>
       onCancel: () => void
     }
   | {
       mode: 'edit'
       node: TreeNode
-      availableAgents: AvailableAgent[]
       onSave: (edits: WorkflowEdits) => Promise<void>
       onCancel: () => void
     }
@@ -44,14 +38,7 @@ type Props =
  */
 export function WorkflowDialog(props: Props) {
   if (props.mode === 'edit') {
-    return (
-      <EditWorkflowDialog
-        node={props.node}
-        availableAgents={props.availableAgents}
-        onSave={props.onSave}
-        onCancel={props.onCancel}
-      />
-    )
+    return <EditWorkflowDialog node={props.node} onSave={props.onSave} onCancel={props.onCancel} />
   }
 
   return (
@@ -60,23 +47,29 @@ export function WorkflowDialog(props: Props) {
       nameEditable
       initialName=""
       initialDescription=""
-      initialColumns={[]}
-      initialReadyAgent={null}
-      availableAgents={props.availableAgents}
+      initialColumns={defaultColumns()}
       onCancel={props.onCancel}
       onSubmit={(values) => props.onCreate(values)}
     />
   )
 }
 
+/** A fresh workflow starts with Ready and Doing already seeded — both
+ *  bot-column by default — since both are ordinary, editable columns rather
+ *  than anything the server assumes. */
+function defaultColumns(): DraftColumn[] {
+  return [
+    { key: crypto.randomUUID(), name: 'Ready', bot: true },
+    { key: crypto.randomUUID(), name: 'Doing', bot: true },
+  ]
+}
+
 function EditWorkflowDialog({
   node,
-  availableAgents,
   onSave,
   onCancel,
 }: {
   node: TreeNode
-  availableAgents: AvailableAgent[]
   onSave: (edits: WorkflowEdits) => Promise<void>
   onCancel: () => void
 }) {
@@ -118,43 +111,34 @@ function EditWorkflowDialog({
       initialName={node.name}
       initialDescription={parsed.description}
       initialColumns={parsed.columns}
-      initialReadyAgent={parsed.readyAgent}
-      availableAgents={availableAgents}
       onCancel={onCancel}
-      onSubmit={(values) =>
-        onSave({ description: values.description, columns: values.columns, readyAgent: values.readyAgent })
-      }
+      onSubmit={(values) => onSave({ description: values.description, columns: values.columns })}
     />
   )
 }
 
 /**
- * `workflow.json` always stores the fixed columns alongside the custom ones
- * (see `scaffoldWorkflow` in server/index.mjs) — stripping the first two and
- * the last recovers just what this dialog lets you edit. Anything short of
- * that shape (hand-edited, or from a future format) is treated as unreadable
- * rather than guessed at.
+ * `workflow.json` always stores the fixed Backlog/Done alongside every
+ * ordinary column (see `scaffoldWorkflow` in server/index.mjs) — stripping
+ * the first and last recovers just what this dialog lets you edit. Anything
+ * short of that shape (hand-edited, or from a future format) is treated as
+ * unreadable rather than guessed at.
  */
-function parseWorkflowFile(
-  content: string,
-): { description: string; columns: DraftColumn[]; readyAgent: string | null } | null {
+function parseWorkflowFile(content: string): { description: string; columns: DraftColumn[] } | null {
   try {
     const parsed = JSON.parse(content) as { description?: unknown; columns?: unknown }
-    if (typeof parsed.description !== 'string' || !Array.isArray(parsed.columns) || parsed.columns.length < 3) {
+    if (typeof parsed.description !== 'string' || !Array.isArray(parsed.columns) || parsed.columns.length < 2) {
       return null
     }
 
-    const ready = parsed.columns[1] as { agent?: unknown }
-    const readyAgent = typeof ready.agent === 'string' ? ready.agent : null
-
-    const custom = parsed.columns.slice(2, -1) as Array<{ name?: unknown; agent?: unknown }>
-    const columns: DraftColumn[] = custom.map((column) => ({
+    const editable = parsed.columns.slice(1, -1) as Array<{ name?: unknown; bot?: unknown }>
+    const columns: DraftColumn[] = editable.map((column) => ({
       key: crypto.randomUUID(),
       name: typeof column.name === 'string' ? column.name : '',
-      agent: typeof column.agent === 'string' ? column.agent : null,
+      bot: column.bot === true,
     }))
 
-    return { description: parsed.description, columns, readyAgent }
+    return { description: parsed.description, columns }
   } catch {
     return null
   }
@@ -167,15 +151,8 @@ type FormProps = {
   initialName: string
   initialDescription: string
   initialColumns: DraftColumn[]
-  initialReadyAgent: string | null
-  availableAgents: AvailableAgent[]
   onCancel: () => void
-  onSubmit: (values: {
-    name: string
-    description: string
-    columns: CustomWorkflowColumn[]
-    readyAgent: string | null
-  }) => Promise<void>
+  onSubmit: (values: { name: string; description: string; columns: CustomWorkflowColumn[] }) => Promise<void>
 }
 
 function WorkflowForm({
@@ -184,15 +161,12 @@ function WorkflowForm({
   initialName,
   initialDescription,
   initialColumns,
-  initialReadyAgent,
-  availableAgents,
   onCancel,
   onSubmit,
 }: FormProps) {
   const [name, setName] = useState(initialName)
   const [description, setDescription] = useState(initialDescription)
   const [columns, setColumns] = useState<DraftColumn[]>(initialColumns)
-  const [readyAgent, setReadyAgent] = useState<string | null>(initialReadyAgent)
   const { pending, error, run } = useAsyncAction()
   const fieldId = useId()
   /** Which card is mid-drag — a ref, since it drives no render of its own. */
@@ -202,14 +176,10 @@ function WorkflowForm({
 
   const trimmedName = name.trim()
   const trimmedDescription = description.trim()
-  /** Ready is never a human column, so — unlike a custom column, where "no
-   *  agent" is simply human — it alone cannot be left without one. */
-  const missingAgent = readyAgent === null
   const complete =
     trimmedDescription.length > 0 &&
     (!nameEditable || trimmedName.length > 0) &&
-    columns.every((column) => column.name.trim().length > 0) &&
-    !missingAgent
+    columns.every((column) => column.name.trim().length > 0)
 
   const updateColumn = (key: string, patch: Partial<DraftColumn>) =>
     setColumns((prev) => prev.map((column) => (column.key === key ? { ...column, ...patch } : column)))
@@ -223,7 +193,7 @@ function WorkflowForm({
   const addColumn = () => {
     const key = crypto.randomUUID()
     flushSync(() => {
-      setColumns((prev) => [...prev, { key, name: '', agent: null }])
+      setColumns((prev) => [...prev, { key, name: '', bot: false }])
     })
     nameInputs.current.get(key)?.focus()
   }
@@ -254,9 +224,8 @@ function WorkflowForm({
         description: trimmedDescription,
         columns: columns.map((column) => ({
           name: column.name.trim(),
-          agent: column.agent,
+          bot: column.bot,
         })),
-        readyAgent,
       }),
     )
   }
@@ -301,28 +270,7 @@ function WorkflowForm({
           <span className="modal__label">Columns</span>
 
           <ul className="columns">
-            <li className="column-card column-card--fixed">{FIXED_LEADING_LABELS[0]}</li>
-
-            <li className="column-card column-card--fixed">
-              <span className="column-card__name">{FIXED_LEADING_LABELS[1]}</span>
-
-              <select
-                className="modal__input column-card__agent"
-                aria-label="Agent"
-                disabled={pending}
-                value={readyAgent ?? ''}
-                onChange={(event) => setReadyAgent(event.target.value || null)}
-              >
-                <option value="" disabled>
-                  {availableAgents.length > 0 ? 'Choose an agent' : 'No agents yet'}
-                </option>
-                {availableAgents.map((agent) => (
-                  <option key={agent.path} value={agent.path}>
-                    {agent.name}
-                  </option>
-                ))}
-              </select>
-            </li>
+            <li className="column-card column-card--fixed">{FIXED_LEADING_LABEL}</li>
 
             {columns.map((column) => (
               <li
@@ -361,20 +309,15 @@ function WorkflowForm({
                   }}
                 />
 
-                <select
-                  className="modal__input column-card__agent"
-                  aria-label="Agent"
-                  disabled={pending}
-                  value={column.agent ?? ''}
-                  onChange={(event) => updateColumn(column.key, { agent: event.target.value || null })}
-                >
-                  <option value="">Human (no agent)</option>
-                  {availableAgents.map((agent) => (
-                    <option key={agent.path} value={agent.path}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
+                <label className="column-card__bot">
+                  <input
+                    type="checkbox"
+                    disabled={pending}
+                    checked={column.bot}
+                    onChange={(event) => updateColumn(column.key, { bot: event.target.checked })}
+                  />
+                  Bot column
+                </label>
 
                 <button
                   type="button"
@@ -395,10 +338,6 @@ function WorkflowForm({
           <button type="button" className="btn" disabled={pending} onClick={addColumn}>
             Add card
           </button>
-
-          {missingAgent && availableAgents.length === 0 && (
-            <p className="modal__error">Create an agent for this project first, then choose it here.</p>
-          )}
         </div>
 
         {error && <p className="modal__error">{error}</p>}

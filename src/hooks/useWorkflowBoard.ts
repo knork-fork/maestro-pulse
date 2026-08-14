@@ -101,9 +101,9 @@ function parseWorkflowBoard(content: string): WorkflowBoard | null {
 
     const columns: WorkflowColumn[] = []
     for (const entry of parsed.columns) {
-      const column = entry as { name?: unknown; agent?: unknown }
+      const column = entry as { name?: unknown; bot?: unknown }
       if (typeof column.name !== 'string') return null
-      columns.push({ name: column.name, agent: typeof column.agent === 'string' ? column.agent : null })
+      columns.push({ name: column.name, bot: column.bot === true })
     }
 
     return {
@@ -120,7 +120,13 @@ function parseWorkflowBoard(content: string): WorkflowBoard | null {
 const parseCards = (value: unknown): WorkflowCard[] =>
   Array.isArray(value)
     ? value.flatMap((entry) => {
-        const card = entry as { id?: unknown; title?: unknown; description?: unknown; column?: unknown }
+        const card = entry as {
+          id?: unknown
+          title?: unknown
+          description?: unknown
+          column?: unknown
+          assigned?: unknown
+        }
         return typeof card.id === 'string' && typeof card.title === 'string' && typeof card.column === 'string'
           ? [
               {
@@ -128,6 +134,7 @@ const parseCards = (value: unknown): WorkflowCard[] =>
                 title: card.title,
                 description: typeof card.description === 'string' ? card.description : '',
                 column: card.column,
+                assigned: typeof card.assigned === 'string' ? card.assigned : null,
               },
             ]
           : []
