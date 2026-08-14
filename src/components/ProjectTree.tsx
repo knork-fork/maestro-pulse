@@ -10,20 +10,20 @@ import { Menu, anchorFromPoint } from './Menu'
 import type { MenuAnchor, MenuItem } from './Menu'
 import { NewMenu, createItems } from './NewMenu'
 
-/** A row for something that does not exist yet: named in the tree, then created. */
-export type Draft = { parentPath: string; type: CreatableType }
+/**
+ * A row for a folder that does not exist yet: named in the tree, then created.
+ * Only folders are drafted — a project is described in a dialog instead.
+ */
+export type Draft = { parentPath: string }
 
-const DRAFT_NAMES: Record<CreatableType, string> = {
-  folder: 'New folder',
-  project: 'New project',
-}
+const DRAFT_NAME = 'New folder'
 
 const INDENT = 14
 const INDENT_OFFSET = 6
 
 type Actions = {
   onToggle: (path: string) => void
-  /** Starts a draft — nothing is created until it is named. */
+  /** Asks for a new entry — nothing is created until it has been described. */
   onCreate: (parentPath: string, type: CreatableType) => void
   onCommitDraft: (name: string) => Promise<void>
   onCancelDraft: () => void
@@ -63,10 +63,15 @@ export function ProjectTree({ nodes, expanded, draft, ...actions }: Props) {
   )
 }
 
+/**
+ * A file has nothing to create inside it, so it is not offered. Anything else
+ * is, but greyed where the rules refuse it — on a project above all, where the
+ * absence of the entries would read as the menu having forgotten them.
+ */
 const menuItems = (node: TreeNode, actions: Actions): MenuItem[] => [
-  ...(acceptsNewChildren(node)
-    ? createItems((type) => actions.onCreate(node.path, type))
-    : []),
+  ...(node.type === 'file'
+    ? []
+    : createItems((type) => actions.onCreate(node.path, type), !acceptsNewChildren(node))),
   { label: 'Rename', onSelect: () => actions.onRequestRename(node) },
   { label: 'Delete', danger: true, onSelect: () => actions.onRequestDelete(node) },
 ]
@@ -89,7 +94,7 @@ function TreeList({ nodes, parentPath, depth, role }: ListProps) {
       {nodes.map((node) => (
         <TreeItem key={node.path} node={node} depth={depth} />
       ))}
-      {draft?.parentPath === parentPath && <DraftItem type={draft.type} depth={depth} />}
+      {draft?.parentPath === parentPath && <DraftItem depth={depth} />}
     </ul>
   )
 }
@@ -139,7 +144,7 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
  * The draft row. It carries the default name pre-selected, so typing replaces
  * it, and only reaches the API once committed — Enter or leaving the field.
  */
-function DraftItem({ type, depth }: { type: CreatableType; depth: number }) {
+function DraftItem({ depth }: { depth: number }) {
   const { onCommitDraft, onCancelDraft } = useTreeContext()
   const { pending, error, run } = useAsyncAction()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -171,10 +176,10 @@ function DraftItem({ type, depth }: { type: CreatableType; depth: number }) {
         <input
           ref={inputRef}
           className="tree__input"
-          defaultValue={DRAFT_NAMES[type]}
+          defaultValue={DRAFT_NAME}
           autoFocus
           disabled={pending}
-          aria-label={`Name of the new ${type}`}
+          aria-label="Name of the new folder"
           onFocus={(event) => event.currentTarget.select()}
           onBlur={(event) => void commit(event.currentTarget.value)}
           onKeyDown={(event) => {

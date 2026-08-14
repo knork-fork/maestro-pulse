@@ -158,6 +158,14 @@ body {
 .menu__item:hover { background: var(--hover); }
 .menu__item--danger { color: var(--danger); }
 
+/* Shown so the menu keeps its shape, but plainly not on offer here. */
+.menu__item:disabled {
+  opacity: 40%;
+  cursor: default;
+}
+
+.menu__item:disabled:hover { background: transparent; }
+
 /* ---- filter ---- */
 
 .sidebar__filter {
@@ -334,6 +342,8 @@ body {
   box-shadow: 0 14px 40px rgb(0 0 0 / 50%);
 }
 
+.modal__panel--wide { max-width: 440px; }
+
 .modal__title {
   margin: 0 0 12px;
   font-size: 14px;
@@ -349,6 +359,15 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* A labelled field, for a dialog that asks about more than one thing. */
+.modal__field + .modal__field { margin-top: 10px; }
+
+.modal__label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-dim);
+}
+
 .modal__input {
   width: 100%;
   padding: 7px 9px;
@@ -361,6 +380,13 @@ body {
 }
 
 .modal__input:focus { border-color: var(--accent); }
+.modal__input::placeholder { color: var(--text-dim); }
+
+.modal__input--multiline {
+  display: block;
+  resize: vertical;
+  line-height: 1.45;
+}
 
 .modal__error {
   margin: 8px 0 0;

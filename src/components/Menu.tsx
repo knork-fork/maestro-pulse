@@ -1,12 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { classes } from './classes'
 
 export type MenuItem = {
   label: string
   onSelect: () => void
   /** Destructive, and coloured as such. */
   danger?: boolean
+  /** Shown, but refused — so the menu reads the same wherever it is opened. */
+  disabled?: boolean
 }
 
 /** The box a menu opens against: a trigger's rect, or a zero-size click point. */
@@ -99,8 +102,9 @@ export function Menu({ anchor, align = 'left', items, onDismiss, ignore }: Props
         <button
           key={item.label}
           type="button"
-          className={`menu__item${item.danger ? ' menu__item--danger' : ''}`}
+          className={classes(['menu__item', item.danger && 'menu__item--danger'])}
           role="menuitem"
+          disabled={item.disabled}
           onClick={() => {
             item.onSelect()
             onDismiss()

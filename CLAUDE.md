@@ -50,6 +50,7 @@ dependency-free Node API that owns the folder tree.
 | Right-click menu + the "New" button's dropdown | [src/components/ProjectTree.tsx](src/components/ProjectTree.tsx), [src/components/NewMenu.tsx](src/components/NewMenu.tsx) |
 | Menu positioning, portalling and dismissal (shared by both) | [src/components/Menu.tsx](src/components/Menu.tsx) |
 | Dialog shell | [src/components/Modal.tsx](src/components/Modal.tsx) |
+| What a new project is asked for | [src/components/NewProjectDialog.tsx](src/components/NewProjectDialog.tsx) |
 | Rename dialog / delete confirmation | [src/components/RenameDialog.tsx](src/components/RenameDialog.tsx), [src/components/ConfirmDialog.tsx](src/components/ConfirmDialog.tsx) |
 | Pending + error state for one user action | [src/hooks/useAsyncAction.ts](src/hooks/useAsyncAction.ts) |
 | Mirroring a Set to localStorage | [src/hooks/usePersistentSet.ts](src/hooks/usePersistentSet.ts) |
@@ -103,11 +104,13 @@ reject, and the draft row and dialogs surface that in place via
 [useAsyncAction.ts](src/hooks/useAsyncAction.ts). Only a reload has no such
 owner, so it reports through the hook's own error state.
 
-Creating is a two-step the *client* drives: a draft row is added to the tree
-first and named there, and only a committed name reaches the API — so a name
-that is already taken is refused rather than worked around.
-[ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx) owns that draft,
-because both the header's "New" button and a folder row's own create into it.
+Creating is a two-step the *client* drives: nothing reaches the API until the
+user has finished describing it, so a name that is already taken is refused
+rather than worked around. The two kinds are asked about differently — a folder
+is named by a draft row in the tree, while a project needs more than a name and
+so is described in a dialog. [ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx)
+owns both, because the header's "New" button, a folder row's own, and the
+context menu all create through it.
 
 Menus are portalled to `<body>` and positioned from a viewport anchor by
 [Menu.tsx](src/components/Menu.tsx), because the tree scrolls and would
@@ -116,8 +119,10 @@ following the anchor.
 
 ### Not yet wired
 
-The filter input is an inert placeholder. Nothing reads a project's contents yet
-— a `project` is a marked directory and nothing more.
+The filter input is an inert placeholder. Nothing reads a project's contents
+back yet: the API writes them at creation, and no one has looked at them since.
+A project's details cannot be edited after the fact, and renaming one does not
+revisit what was written into it.
 
 ## Data shape
 
@@ -138,6 +143,15 @@ the API records it in a marker file inside the directory — living there rather
 than in one manifest at the root means a rename or a move by hand carries it
 along. Unmarked directories are reported as plain contents. See `directoryType`
 and `TYPE_FILE` in [server/index.mjs](server/index.mjs).
+
+A `project` is more than that marker: the API also gives it a starting structure
+and records the details the dialog collected, one of which is an absolute path to
+a directory on the *user's own machine*. That path is only ever written down —
+the api container cannot see it, and deliberately never resolves or touches it.
+Scaffolding is the API's job, not the client's, so what a project *is* has one
+answer on the side that owns the filesystem; see `scaffoldProject`. Unlike the
+marker, what it writes is ordinary content: visible in the tree, and the user's
+to edit afterwards.
 
 Persisted to `localStorage`: a JSON `string[]` of expanded tree paths, written
 and re-validated by [usePersistentSet.ts](src/hooks/usePersistentSet.ts).

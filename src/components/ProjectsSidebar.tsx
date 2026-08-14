@@ -4,6 +4,7 @@ import type { CreatableType, TreeNode } from '../data/tree'
 import { useProjectTree } from '../hooks/useProjectTree'
 import { ConfirmDialog } from './ConfirmDialog'
 import { NewMenu } from './NewMenu'
+import { NewProjectDialog } from './NewProjectDialog'
 import { ProjectTree } from './ProjectTree'
 import type { Draft } from './ProjectTree'
 import { RenameDialog } from './RenameDialog'
@@ -13,24 +14,35 @@ import { RefreshIcon } from './icons'
  * The left pane, and the owner of everything the tree can be in the middle of:
  * the unsaved draft row (which the header's "+" and a folder's own "+" both
  * start) and whichever dialog is open.
+ *
+ * Both "+" menus and the tree's context menu funnel into `startCreate`, which is
+ * where the two kinds part company: a folder is named in the tree, a project is
+ * asked about in a dialog.
  */
 export function ProjectsSidebar() {
   const tree = useProjectTree()
   const [draft, setDraft] = useState<Draft | null>(null)
+  /** The parent a project is being described for, if one is. */
+  const [creatingIn, setCreatingIn] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<TreeNode | null>(null)
   const [deleting, setDeleting] = useState<TreeNode | null>(null)
 
-  const startDraft = (parentPath: string, type: CreatableType) => {
+  const startCreate = (parentPath: string, type: CreatableType) => {
+    if (type === 'project') {
+      setCreatingIn(parentPath)
+      return
+    }
+
     // The draft has to be visible to be typed into.
     tree.reveal(parentPath)
-    setDraft({ parentPath, type })
+    setDraft({ parentPath })
   }
 
   const commitDraft = async (name: string) => {
     if (!draft) return
     const committed = draft
 
-    await tree.create(committed.parentPath, committed.type, name)
+    await tree.createFolder(committed.parentPath, name)
     // Leaving the field commits, so another "+" may have started a second draft
     // while this one was saving — that one is not ours to close.
     setDraft((current) => (current === committed ? null : current))
@@ -51,7 +63,7 @@ export function ProjectsSidebar() {
           >
             <RefreshIcon />
           </button>
-          <NewMenu onCreate={(type) => startDraft(ROOT_PATH, type)} />
+          <NewMenu onCreate={(type) => startCreate(ROOT_PATH, type)} />
         </div>
       </header>
 
@@ -73,7 +85,7 @@ export function ProjectsSidebar() {
             expanded={tree.expanded}
             draft={draft}
             onToggle={tree.toggle}
-            onCreate={startDraft}
+            onCreate={startCreate}
             onCommitDraft={commitDraft}
             onCancelDraft={() => setDraft(null)}
             onRequestRename={setRenaming}
@@ -83,6 +95,16 @@ export function ProjectsSidebar() {
           !tree.error && <p className="empty-state">{tree.loaded ? 'No projects added' : 'Loading…'}</p>
         )}
       </nav>
+
+      {creatingIn !== null && (
+        <NewProjectDialog
+          onCreate={async (details) => {
+            await tree.createProject(creatingIn, details)
+            setCreatingIn(null)
+          }}
+          onCancel={() => setCreatingIn(null)}
+        />
+      )}
 
       {renaming && (
         <RenameDialog

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { CreatableType, TreeNode } from '../data/tree'
+import type { TreeNode } from '../data/tree'
 import * as api from '../data/api'
+import type { ProjectDetails } from '../data/api'
 import { usePersistentSet } from './usePersistentSet'
 
 const EXPANDED_STORAGE_KEY = 'maestro-pulse:tree-expanded'
@@ -63,12 +64,23 @@ export function useProjectTree() {
     [setExpanded],
   )
 
-  const create = useCallback(
-    async (parentPath: string, type: CreatableType, name: string) => {
-      await api.createEntry(parentPath, type, name)
+  const createFolder = useCallback(
+    async (parentPath: string, name: string) => {
+      await api.createFolder(parentPath, name)
       await load()
     },
     [load],
+  )
+
+  const createProject = useCallback(
+    async (parentPath: string, details: ProjectDetails) => {
+      await api.createProject(parentPath, details)
+      // Named in a dialog rather than in the tree, so the parent may still be
+      // shut — open it, or the project the user just made is nowhere to be seen.
+      reveal(parentPath)
+      await load()
+    },
+    [load, reveal],
   )
 
   const rename = useCallback(
@@ -98,7 +110,8 @@ export function useProjectTree() {
     reload,
     toggle,
     reveal,
-    create,
+    createFolder,
+    createProject,
     rename,
     remove,
   }

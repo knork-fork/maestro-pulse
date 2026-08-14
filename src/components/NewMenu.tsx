@@ -3,7 +3,7 @@ import type { CreatableType } from '../data/tree'
 import { classes } from './classes'
 import { PlusIcon } from './icons'
 import { Menu, anchorFromRect } from './Menu'
-import type { MenuAnchor } from './Menu'
+import type { MenuAnchor, MenuItem } from './Menu'
 
 type Props = {
   /** Extra classes for the anchor, e.g. to control hover reveal in the tree. */
@@ -58,8 +58,14 @@ export function NewMenu({ className, size = 'md', label = 'New', onCreate }: Pro
   )
 }
 
-/** The create entries, shared with the tree's context menu. */
-export const createItems = (onCreate: (type: CreatableType) => void) => [
-  { label: 'New project', onSelect: () => onCreate('project') },
-  { label: 'New folder', onSelect: () => onCreate('folder') },
+/**
+ * The create entries, shared with the tree's context menu — which shows them
+ * greyed on a row that cannot take children, rather than dropping them.
+ */
+export const createItems = (
+  onCreate: (type: CreatableType) => void,
+  disabled = false,
+): MenuItem[] => [
+  { label: 'New project', disabled, onSelect: () => onCreate('project') },
+  { label: 'New folder', disabled, onSelect: () => onCreate('folder') },
 ]

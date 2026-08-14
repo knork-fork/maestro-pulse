@@ -1,4 +1,4 @@
-import type { CreatableType, TreeNode } from './tree'
+import type { TreeNode } from './tree'
 
 /** nginx proxies this prefix to the API service; see nginx.conf. */
 const BASE = '/api'
@@ -6,12 +6,28 @@ const BASE = '/api'
 /** The projects root itself — the parent to create in at the top level. */
 export const ROOT_PATH = ''
 
+/** What a project is created with, beyond the name every entry has. */
+export type ProjectDetails = {
+  name: string
+  /** An absolute path on the user's machine, recorded and never touched. */
+  location: string
+  description: string
+}
+
 export const fetchTree = () =>
   request<{ nodes: TreeNode[] }>('GET', '/tree').then((body) => body.nodes)
 
 /** Rejects if `name` is taken, which is what the draft row reports. */
-export const createEntry = (parent: string, type: CreatableType, name: string) =>
-  request<{ path: string }>('POST', '/entries', { parent, type, name }).then((body) => body.path)
+export const createFolder = (parent: string, name: string) =>
+  request<{ path: string }>('POST', '/entries', { parent, type: 'folder', name }).then(
+    (body) => body.path,
+  )
+
+/** Rejects if the name is taken, which is what the dialog reports. */
+export const createProject = (parent: string, details: ProjectDetails) =>
+  request<{ path: string }>('POST', '/entries', { parent, type: 'project', ...details }).then(
+    (body) => body.path,
+  )
 
 /** Resolves to the entry's new path, which differs from the old one. */
 export const renameEntry = (path: string, name: string) =>

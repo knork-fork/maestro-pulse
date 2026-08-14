@@ -25,10 +25,19 @@ const ROOT = path.resolve(process.env.PROJECTS_ROOT ?? '/resources/projects')
 const TYPE_FILE = '.maestro.json'
 const CREATABLE_TYPES = ['folder', 'project']
 
+/**
+ * What a new project is given. Unlike TYPE_FILE these are the user's own — they
+ * are plain contents, visible in the tree and theirs to edit afterwards.
+ */
+const PROJECT_FILE = 'project.json'
+const README_FILE = 'README.md'
+const PROJECT_SUBDIRECTORIES = ['agents', 'workflows', 'tools']
+
 /** Bounds the recursive read against deep nesting and symlink cycles. */
 const MAX_DEPTH = 12
 const MAX_BODY_BYTES = 64 * 1024
 const MAX_NAME_LENGTH = 255
+const MAX_TEXT_LENGTH = 4096
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -53,8 +62,11 @@ async function getTree() {
 /**
  * Creates a folder or a project inside `parent`, recording which it is so the
  * tree can offer the right actions on it later. A name already in use is a
- * conflict, not something to work around — the client is naming a draft row the
+ * conflict, not something to work around — the client is naming something the
  * user is looking at, and needs to be told.
+ *
+ * A project is additionally given its structure here rather than by the client,
+ * so what a project *is* stays one answer on the side that owns the filesystem.
  */
 async function createEntry(req) {
   const body = await readJson(req)
@@ -62,17 +74,40 @@ async function createEntry(req) {
   const type = validType(body.type)
   const name = validName(body.name)
 
+  // A project carries details a folder does not. Validating them here, before
+  // anything is written, means a bad body never leaves a directory behind.
+  const details =
+    type === 'project'
+      ? {
+          name,
+          location: hostPath(body.location),
+          description: requiredText(body.description, 'description'),
+        }
+      : null
+
   await ensureRoot()
 
   if (parent && !(await isDirectory(path.join(ROOT, parent)))) {
     throw new HttpError(404, `No such folder: ${parent}`)
   }
 
+  const abs = path.join(ROOT, parent, name)
+
   try {
-    await mkdirTyped(path.join(ROOT, parent, name), type)
+    await mkdirTyped(abs, type)
   } catch (error) {
     if (error.code === 'EEXIST') throw new HttpError(409, `"${name}" already exists`)
     throw mapFsError(error)
+  }
+
+  if (details) {
+    try {
+      await scaffoldProject(abs, details)
+    } catch (error) {
+      // Half a project is worse than none, and the directory is ours: undo it.
+      await rm(abs, { recursive: true, force: true }).catch(() => {})
+      throw mapFsError(error)
+    }
   }
 
   return { status: 201, body: { path: join(parent, name) } }
@@ -186,6 +221,24 @@ async function mkdirTyped(abs, type) {
   await writeFile(path.join(abs, TYPE_FILE), `${JSON.stringify({ type }, null, 2)}\n`)
 }
 
+/**
+ * Fills a freshly made project directory. The location is only ever recorded —
+ * it names a directory on the user's machine that this service cannot see and
+ * has no business creating or reading.
+ */
+async function scaffoldProject(abs, { name, location, description }) {
+  await writeFile(
+    path.join(abs, PROJECT_FILE),
+    `${JSON.stringify({ dir_on_host: location }, null, 2)}\n`,
+  )
+  await writeFile(
+    path.join(abs, README_FILE),
+    `# ${name}\n\n${description}\n\n# Location on host\n${location}\n`,
+  )
+
+  for (const child of PROJECT_SUBDIRECTORIES) await mkdir(path.join(abs, child))
+}
+
 // ---- validation ----
 
 function relativePath(input, { allowRoot = false } = {}) {
@@ -228,6 +281,29 @@ function validName(input) {
   if (name.startsWith('.')) throw new HttpError(400, 'A name cannot start with a dot')
 
   return name
+}
+
+/**
+ * A directory on the user's machine, which this service never resolves — so it
+ * is checked for shape only, and absoluteness is the one thing that makes it
+ * mean the same thing from wherever it is later read.
+ */
+function hostPath(input) {
+  const value = requiredText(input, 'location')
+
+  if (!value.startsWith('/')) throw new HttpError(400, 'The location must be an absolute path')
+
+  return value
+}
+
+function requiredText(input, field) {
+  const value = typeof input === 'string' ? input.trim() : ''
+
+  if (!value) throw new HttpError(400, `A ${field} is required`)
+  if (value.length > MAX_TEXT_LENGTH) throw new HttpError(400, `That ${field} is too long`)
+  if (value.includes('\0')) throw new HttpError(400, `Invalid ${field}`)
+
+  return value
 }
 
 // ---- filesystem helpers ----
