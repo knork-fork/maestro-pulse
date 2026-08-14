@@ -40,6 +40,18 @@ const VERBOSITY_DESCRIPTIONS: Record<number, string> = {
   100: 'Scholar',
 }
 
+const HEARTBEAT_TOOLTIP =
+  'How often the agent checks in for new work. Checking in less often uses fewer tokens overall.'
+
+const MAX_CHILDREN_TOOLTIP =
+  'How many subagents can run at once. A lower limit is cheaper overall, but slower for work that could otherwise run in parallel.'
+
+const HANDHOLDING_TOOLTIP =
+  'At high values, subagents will often stop and wait for human input before continuing. This combines poorly with a high Max children, since many subagents can end up blocked waiting on you at the same time. 50% is the baseline value.'
+
+const VERBOSITY_TOOLTIP =
+  'Lower verbosity is fine for internal, agent-to-agent use where no one is reading every message closely. 50% is the baseline value.'
+
 type Props = { path: string; name: string }
 
 /**
@@ -114,9 +126,9 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
           <img className="agent-view__avatar" src={agentAvatar(name)} alt={name} />
 
           <div className="modal__field">
-            <label className="modal__label" htmlFor="agent-view-heartbeat">
+            <FieldLabel htmlFor="agent-view-heartbeat" tooltip={HEARTBEAT_TOOLTIP}>
               Heartbeat
-            </label>
+            </FieldLabel>
             <RangeField
               id="agent-view-heartbeat"
               min={5}
@@ -129,9 +141,9 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
           </div>
 
           <div className="modal__field">
-            <label className="modal__label" htmlFor="agent-view-max-children">
+            <FieldLabel htmlFor="agent-view-max-children" tooltip={MAX_CHILDREN_TOOLTIP}>
               Max children
-            </label>
+            </FieldLabel>
             <RangeField
               id="agent-view-max-children"
               min={1}
@@ -144,9 +156,9 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
           </div>
 
           <div className="modal__field">
-            <label className="modal__label" htmlFor="agent-view-handholding">
+            <FieldLabel htmlFor="agent-view-handholding" tooltip={HANDHOLDING_TOOLTIP}>
               Handholding
-            </label>
+            </FieldLabel>
             <RangeField
               id="agent-view-handholding"
               min={0}
@@ -162,9 +174,9 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
           </div>
 
           <div className="modal__field">
-            <label className="modal__label" htmlFor="agent-view-verbosity">
+            <FieldLabel htmlFor="agent-view-verbosity" tooltip={VERBOSITY_TOOLTIP}>
               Verbosity
-            </label>
+            </FieldLabel>
             <RangeField
               id="agent-view-verbosity"
               min={0}
@@ -204,6 +216,22 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
         </div>
       </div>
     </div>
+  )
+}
+
+function FieldLabel({
+  htmlFor,
+  tooltip,
+  children,
+}: {
+  htmlFor: string
+  tooltip: string
+  children: string
+}) {
+  return (
+    <label className="modal__label" htmlFor={htmlFor} title={tooltip}>
+      {children}
+    </label>
   )
 }
 
