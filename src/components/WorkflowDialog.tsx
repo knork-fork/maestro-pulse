@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import type { CustomWorkflowColumn, NewWorkflowDetails, WorkflowEdits } from '../data/api'
 import { workflowFilePath } from '../data/api'
 import type { TreeNode } from '../data/tree'
@@ -151,6 +152,8 @@ function WorkflowForm({
   const fieldId = useId()
   /** Which card is mid-drag — a ref, since it drives no render of its own. */
   const draggingKey = useRef<string | null>(null)
+  /** Name inputs, keyed by card, so Enter can focus the one just added. */
+  const nameInputs = useRef(new Map<string, HTMLInputElement>())
 
   const trimmedName = name.trim()
   const trimmedDescription = description.trim()
@@ -166,8 +169,19 @@ function WorkflowForm({
     // Leaving a bot card clears its agent immediately, not just at submit.
     updateColumn(key, actor === 'human' ? { actor, agent: null } : { actor })
 
-  const addColumn = () =>
-    setColumns((prev) => [...prev, { key: crypto.randomUUID(), name: '', actor: 'human', agent: null }])
+  /**
+   * Focuses the new card's name field, so pressing Enter to add one lets you
+   * keep typing straight through several cards without reaching for the mouse.
+   * `flushSync` forces the row to actually exist in the DOM before we look up
+   * its input by key — without it, the input isn't there yet to focus.
+   */
+  const addColumn = () => {
+    const key = crypto.randomUUID()
+    flushSync(() => {
+      setColumns((prev) => [...prev, { key, name: '', actor: 'human', agent: null }])
+    })
+    nameInputs.current.get(key)?.focus()
+  }
 
   const removeColumn = (key: string) => setColumns((prev) => prev.filter((column) => column.key !== key))
 
@@ -263,12 +277,23 @@ function WorkflowForm({
                 }}
               >
                 <input
+                  ref={(el) => {
+                    if (el) nameInputs.current.set(column.key, el)
+                    else nameInputs.current.delete(column.key)
+                  }}
                   className="modal__input column-card__name"
                   value={column.name}
                   placeholder="Column name"
                   disabled={pending}
                   aria-label="Column name"
                   onChange={(event) => updateColumn(column.key, { name: event.target.value })}
+                  onKeyDown={(event) => {
+                    // Enter adds the next card instead of submitting the form.
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      addColumn()
+                    }
+                  }}
                 />
 
                 <button
