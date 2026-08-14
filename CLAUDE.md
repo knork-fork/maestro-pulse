@@ -275,11 +275,11 @@ and re-validated by [usePersistentSet.ts](src/hooks/usePersistentSet.ts).
 > clicking, no hunting for a headless browser, no `curl`ing the running app.
 > The user tests the app manually.
 >
-> Your side of "verify" is: rebuild via `docker-compose` and confirm the
-> containers are up. Type checking runs in CI, not as an ad-hoc local command.
-> Then **hand the user a short list of what to click and what they should
-> see**, ordered so each step builds on the last, and stop there. Say plainly
-> which parts you could not check yourself.
+> Your side of "verify" is: rebuild via `docker-compose up -d --build` and
+> typecheck via [scripts/ci.sh](scripts/ci.sh). Then **hand the user a short
+> list of what to click and what they should see**, ordered so each step
+> builds on the last, and stop there. Say plainly which parts you could not
+> check yourself.
 
 The SPA is compiled into the image, so **any frontend edit requires a rebuild** —
 restarting the container alone serves the previous bundle. The api service is
@@ -288,7 +288,6 @@ up a change.
 
 ```bash
 docker-compose up -d --build       # start, and apply any change
-docker-compose ps                  # confirm both services are up
 docker-compose logs web api        # nginx access/error logs, API request log
 docker-compose down                # stop
 ```
