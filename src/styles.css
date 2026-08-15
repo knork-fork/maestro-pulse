@@ -402,8 +402,8 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  margin: 14px;
-  padding: 14px 16px;
+  margin: 16px;
+  padding: 20px 24px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-sidebar);
@@ -411,16 +411,16 @@ body {
 
 .board__title {
   flex: none;
-  margin: 0 0 4px;
-  font-size: 1.2em;
-  font-weight: 600;
+  margin: 0 0 6px;
+  font-size: 1.4em;
+  font-weight: 700;
   color: #ededf0;
 }
 
 .board__description {
   flex: none;
   width: 100%;
-  margin: 0 0 14px;
+  margin: 0 0 22px;
   color: var(--text-dim);
 }
 
@@ -429,47 +429,83 @@ body {
   min-height: 0;
   display: flex;
   align-items: stretch;
-  gap: 14px;
+  gap: 16px;
   overflow-x: auto;
   overflow-y: hidden;
 }
 
 .column {
   flex: none;
-  width: 240px;
+  width: 300px;
   display: flex;
   flex-direction: column;
   min-height: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   /* Lighter than the board panel behind it, so each column reads as its
-     own tray sitting inside that panel. */
+     own lane sitting inside that panel. */
   background: var(--bg-main);
-  padding: 10px;
+  padding: 14px;
+  transition: border-color 120ms ease;
+}
+
+/* A restrained cue for the current drop target — the tooltip carries the
+   rest of the hover feedback. */
+.column:hover {
+  border-color: var(--icon);
 }
 
 .column__header {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
   padding: 0 2px;
-  color: var(--text-dim);
+  color: var(--text);
   font-weight: 600;
 }
 
-.column__add {
-  margin-left: auto;
+.column__header-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* The one bot/human distinction — a small emoji, not a border or a solid
-   icon, so it doesn't compete for attention with every human column next
-   to it. */
-.column__bot-icon {
+.column__add {
+  margin-left: 0;
+}
+
+/* The bot/human distinction: the assigned agent's own avatar, inline and
+   small, so it reads as "this column is handled by this agent" rather than
+   competing with the header for attention. Human columns render nothing
+   here at all. */
+.column__agent-avatar {
   flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* A small boxed count — a discrete secondary element, not a bright
+   notification badge. */
+.column__count {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-panel);
+  color: var(--text-dim);
   font-size: 11px;
-  line-height: 1;
+  font-weight: 600;
 }
 
 .column__cards {
@@ -478,10 +514,94 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   margin: 0;
   padding: 0 2px 2px 0;
   list-style: none;
+}
+
+/* ---- column tooltip ----
+
+   A custom floating popover, not the native `title` attribute, so the
+   column description reads with the same dark-panel language as the rest
+   of the board. Hover- and focus-driven, purely in CSS — `.column__label`
+   sits inside a full-height `.column`, so the popover never needs to
+   escape a clipping ancestor the way a menu portal would. */
+
+.column__label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  outline: none;
+}
+
+.column__label:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.column__tooltip {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 3;
+  margin-top: 10px;
+  width: max-content;
+  max-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-menu);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 50%);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+  pointer-events: none;
+}
+
+.column__label:hover .column__tooltip,
+.column__label:focus-within .column__tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.column__tooltip::before,
+.column__tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 14px;
+  border: 6px solid transparent;
+}
+
+.column__tooltip::before { border-bottom-color: var(--border); }
+
+.column__tooltip::after {
+  margin-left: 1px;
+  border-width: 5px;
+  border-bottom-color: var(--bg-menu);
+}
+
+.column__tooltip-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.column__tooltip-desc {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim);
 }
 
 /* ---- kanban card ---- */
@@ -490,43 +610,48 @@ body {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 14px;
+  min-height: 72px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  /* Lighter than the column behind it, so it reads as a raised chip. */
+  border-radius: 10px;
+  /* Lighter than the column behind it, so it reads as a raised tile. */
   background: var(--bg-menu);
   box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
 }
 
+/* The ring is a real `border`, not a box-shadow: a blurred box-shadow gets
+   clipped to the card's own square bounding box before the blur is applied,
+   which is what was reading as a rectangular glow poking past the rounded
+   corners. A real border always follows border-radius exactly. */
 .card--status-blocked {
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 30%),
-    inset 0 0 0 2px var(--danger-solid);
+  border-width: 2px;
+  border-color: var(--danger-solid);
+  background: rgb(193 68 63 / 10%);
 }
 
 .card--status-in-session {
-  animation: card-pulse-orange 3.2s ease-in-out infinite;
+  border-width: 2px;
+  animation: card-pulse-orange 2.6s ease-in-out infinite;
 }
 
+/* Pulses purely by animating the border's own color between full strength
+   and a dim (but non-zero) tint, so the active state never fully vanishes
+   between frames. */
 @keyframes card-pulse-orange {
   0%,
   100% {
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 30%),
-      inset 0 0 0 2px var(--agent);
+    border-color: var(--agent);
   }
   50% {
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 30%),
-      inset 0 0 0 2px transparent;
+    border-color: rgb(232 161 60 / 25%);
   }
 }
 
 .card__avatar {
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
 }
 
@@ -552,6 +677,7 @@ body {
   background: transparent;
   color: var(--text);
   font: inherit;
+  font-weight: 500;
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;

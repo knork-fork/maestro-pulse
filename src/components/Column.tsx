@@ -1,4 +1,5 @@
 import type { WorkflowCard, WorkflowColumn } from '../data/api'
+import { agentAvatar } from './avatar'
 import { Card } from './Card'
 import { classes } from './classes'
 import { PlusIcon } from './icons'
@@ -48,25 +49,34 @@ export function Column({
 
   return (
     <div className={classes(['column', isBot ? 'column--bot' : 'column--human'])}>
-      <div className="column__header" title={column.description}>
-        {isBot && (
-          <span className="column__bot-icon" aria-hidden="true">
-            🤖
-          </span>
-        )}
-        <span className="column__name">{column.name}</span>
+      <div className="column__header">
+        <div className="column__label" tabIndex={0}>
+          {isBot && agentName && (
+            <img className="column__agent-avatar" src={agentAvatar(agentName)} alt={agentName} />
+          )}
+          <span className="column__name">{column.name}</span>
 
-        {isFirst && onAdd && (
-          <button
-            type="button"
-            className="icon-btn icon-btn--sm column__add"
-            title="Add a backlog ticket"
-            aria-label="Add a backlog ticket"
-            onClick={onAdd}
-          >
-            <PlusIcon />
-          </button>
-        )}
+          <div className="column__tooltip" role="tooltip">
+            <span className="column__tooltip-title">{column.name}</span>
+            <span className="column__tooltip-desc">{column.description}</span>
+          </div>
+        </div>
+
+        <div className="column__header-actions">
+          <span className="column__count">{cards.length}</span>
+
+          {isFirst && onAdd && (
+            <button
+              type="button"
+              className="icon-btn icon-btn--sm column__add"
+              title="Add a backlog ticket"
+              aria-label="Add a backlog ticket"
+              onClick={onAdd}
+            >
+              <PlusIcon />
+            </button>
+          )}
+        </div>
       </div>
 
       <ul className="column__cards">
