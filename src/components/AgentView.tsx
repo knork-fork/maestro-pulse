@@ -21,8 +21,11 @@ import {
   VERBOSITY_TOOLTIP,
 } from '../data/agent'
 import type { AgentData } from '../data/agent'
+import type { AgentEdits } from '../data/api'
+import type { TreeNode } from '../data/tree'
 import { useAgentInstructions } from '../hooks/useAgentInstructions'
 import { useAgentProfile } from '../hooks/useAgentProfile'
+import { AgentDialog } from './AgentDialog'
 import { AgentInstructionsModal } from './AgentInstructionsModal'
 import { FieldLabel, RangeField } from './AgentFields'
 import { agentAvatar } from './avatar'
@@ -87,7 +90,13 @@ const DEFAULT_TOOL_LOOK: ToolLook = { Icon: WrenchIcon, tint: 'var(--icon)' }
  *  that its own agent.json just changed underneath it, since it reads the
  *  file directly through its own `useAgentProfile` rather than through the
  *  tree — mirrors KanbanBoard.tsx's identical `treeVersion` convention. */
-type Props = { path: string; name: string; treeVersion: unknown }
+type Props = {
+  path: string
+  name: string
+  node: TreeNode
+  treeVersion: unknown
+  onSave: (path: string, edits: AgentEdits) => Promise<void>
+}
 
 /**
  * An agent's own profile — `name`, `title`, `description`, `mission`, and the
@@ -98,10 +107,11 @@ type Props = { path: string; name: string; treeVersion: unknown }
  * Spawn/Logs/Open session controls remain sample UI data with nothing behind
  * them yet. See the "Not yet wired" note in ../../CLAUDE.md.
  */
-export function AgentView({ path, name, treeVersion }: Props) {
+export function AgentView({ path, name, node, treeVersion, onSave }: Props) {
   const { data, error, loading, reload, update } = useAgentProfile(path)
   const instructions = useAgentInstructions(path)
   const [editingInstructions, setEditingInstructions] = useState(false)
+  const [editingProfile, setEditingProfile] = useState(false)
   /** Skips the redundant reload on mount — `useAgentProfile`/
    *  `useAgentInstructions` already load themselves then; this effect only
    *  needs to fire on a *later* tree reload. */
@@ -146,7 +156,7 @@ export function AgentView({ path, name, treeVersion }: Props) {
         </button>
       </div>
 
-      <BasicInfoCard name={name} data={data} onChange={update} />
+      <BasicInfoCard name={name} data={data} onChange={update} onEdit={() => setEditingProfile(true)} />
       <InstructionsCard
         content={instructions.content}
         error={instructions.error}
@@ -165,6 +175,18 @@ export function AgentView({ path, name, treeVersion }: Props) {
           onCancel={() => setEditingInstructions(false)}
         />
       )}
+
+      {editingProfile && (
+        <AgentDialog
+          mode="edit"
+          node={node}
+          onSave={async (edits) => {
+            await onSave(node.path, edits)
+            setEditingProfile(false)
+          }}
+          onCancel={() => setEditingProfile(false)}
+        />
+      )}
     </div>
   )
 }
@@ -173,13 +195,22 @@ function BasicInfoCard({
   name,
   data,
   onChange,
+  onEdit,
 }: {
   name: string
   data: AgentData
   onChange: (changes: Partial<AgentData>) => void
+  onEdit: () => void
 }) {
   return (
     <div className="agent-view__card">
+      <div className="agent-view__card-header">
+        <h3 className="agent-view__card-title">Profile</h3>
+        <button type="button" className="btn btn--sm" onClick={onEdit}>
+          Edit
+        </button>
+      </div>
+
       <div className="agent-view__head">
         <div className="agent-view__rail">
           <img className="agent-view__rail-avatar" src={agentAvatar(name)} alt={name} />

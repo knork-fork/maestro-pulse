@@ -205,7 +205,12 @@ renamed project not revisiting what was written into it.
 Opening an agent's view shows a full profile card — name, title, description,
 mission, and the four numeric settings (heartbeat, max children, handholding,
 verbosity) all come from `agent.json`, editable via
-[AgentDialog.tsx](src/components/AgentDialog.tsx); the "Not running"
+[AgentDialog.tsx](src/components/AgentDialog.tsx) — reachable both from the
+tree's "Edit" context-menu row (through `ProjectsSidebar.tsx`'s own
+`editingAgent` state) and from the profile card's own "Edit" button in
+[AgentView.tsx](src/components/AgentView.tsx), which opens the identical
+dialog and saves through the same `tree.updateAgent`, threaded down through
+`MainPane.tsx`; the "Not running"
 status and the Spawn/Logs/Open session controls are still UI-only sample
 values with no session model, no persistence, and no server support behind
 them, the Toolkit section is a hardcoded list with a no-op Edit, and the

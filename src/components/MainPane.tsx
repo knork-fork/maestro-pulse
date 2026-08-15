@@ -1,3 +1,4 @@
+import type { AgentEdits } from '../data/api'
 import type { TreeNode } from '../data/tree'
 import { locate, parseAgentViewPath, parseBoardPath } from '../data/tree'
 import { useFileContent } from '../hooks/useFileContent'
@@ -9,6 +10,7 @@ import { KanbanBoard } from './KanbanBoard'
 type Props = {
   nodes: TreeNode[]
   selectedPath: string | null
+  updateAgent: (path: string, edits: AgentEdits) => Promise<void>
 }
 
 /**
@@ -19,7 +21,7 @@ type Props = {
  * a mutation re-reads the tree, a path that no longer resolves simply falls back
  * to the empty state, and no one has to remember to clear anything.
  */
-export function MainPane({ nodes, selectedPath }: Props) {
+export function MainPane({ nodes, selectedPath, updateAgent }: Props) {
   // The board is not a file, so it is checked for before `locate` even runs
   // against the file-view machinery below — see `workflowBoardPath` in
   // ../data/tree.
@@ -45,7 +47,14 @@ export function MainPane({ nodes, selectedPath }: Props) {
     if (found && found.node.type === 'agent') {
       return (
         <main className="main">
-          <AgentView key={found.node.path} path={found.node.path} name={found.node.name} treeVersion={nodes} />
+          <AgentView
+            key={found.node.path}
+            path={found.node.path}
+            name={found.node.name}
+            node={found.node}
+            treeVersion={nodes}
+            onSave={updateAgent}
+          />
         </main>
       )
     }

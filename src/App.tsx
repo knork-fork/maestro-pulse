@@ -14,7 +14,7 @@ export default function App() {
   return (
     <div className="app">
       <ProjectsSidebar tree={tree} />
-      <MainPane nodes={tree.nodes} selectedPath={tree.selectedPath} />
+      <MainPane nodes={tree.nodes} selectedPath={tree.selectedPath} updateAgent={tree.updateAgent} />
       <SessionsSidebar />
     </div>
   )

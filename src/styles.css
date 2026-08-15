@@ -815,7 +815,6 @@ body {
    dialog keeps its own appearance. */
 
 .agent-view {
-  max-width: 62rem;
   display: flex;
   flex-direction: column;
   gap: 12px;
