@@ -10,18 +10,28 @@ docker compose up -d --build
 
 Then open <http://localhost:20444>.
 
-## Where your projects live
-
-In `resources/projects`, in this repo. You never have to create it — it is made
-for you, at the latest when you add your first folder — and it is git-ignored, so
-what you put there is yours and stays out of commits.
-
-The API writes there as your own user (uid/gid 1000 by default). If yours differ,
-run with them set:
+The API writes into `resources/projects` as your own user (uid/gid 1000 by
+default). If yours differ, run with them set:
 
 ```bash
 UID=$(id -u) GID=$(id -g) docker compose up -d --build
 ```
+
+## Usage
+
+Create a project from the sidebar's "New" button. It's scaffolded on disk
+under `resources/projects/<name>`, which is git-ignored in this repo — so to
+keep your own project's files under version control, `cd` into it and
+`git init` there:
+
+```bash
+cd resources/projects/<name>
+git init
+```
+
+`project.json` (which records the project's location on your host machine) is
+gitignored inside that new repo too; `project.json.dist` is committed instead,
+as a template.
 
 ## Stop
 
