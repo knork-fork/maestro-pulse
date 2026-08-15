@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ComponentType, CSSProperties } from 'react'
 import {
   HANDHOLDING_DESCRIPTIONS,
   HANDHOLDING_MAX,
@@ -26,6 +27,20 @@ import { AgentInstructionsModal } from './AgentInstructionsModal'
 import { FieldLabel, RangeField } from './AgentFields'
 import { agentAvatar } from './avatar'
 import { SafeMarkdown } from '../views/MarkdownView'
+import {
+  BookIcon,
+  BranchIcon,
+  CommitIcon,
+  DiffIcon,
+  FileIcon,
+  ListIcon,
+  PencilIcon,
+  PlayIcon,
+  RocketIcon,
+  SearchIcon,
+  TerminalIcon,
+  WrenchIcon,
+} from './icons'
 
 const STATUS_LABEL = 'Not running'
 
@@ -44,6 +59,27 @@ const TOOLKIT_TOOLS = [
   'Deploy Preview',
   'Fetch Docs',
 ]
+
+type ToolLook = { Icon: ComponentType<{ className?: string }>; tint: string }
+
+/** How a capability tile is drawn. A tool with no entry falls back to
+ *  `DEFAULT_TOOL_LOOK`, so the toolkit survives one being added or renamed.
+ *  Tints are existing theme tokens only — see :root in ../styles.css. */
+const TOOL_LOOKS: Record<string, ToolLook> = {
+  'Create PR': { Icon: BranchIcon, tint: 'var(--workflow)' },
+  'Run Tests': { Icon: PlayIcon, tint: 'var(--syntax-string)' },
+  'Read File': { Icon: FileIcon, tint: 'var(--syntax-key)' },
+  'Edit File': { Icon: PencilIcon, tint: 'var(--agent)' },
+  'Search Codebase': { Icon: SearchIcon, tint: 'var(--syntax-boolean)' },
+  'Run Shell Command': { Icon: TerminalIcon, tint: 'var(--syntax-string)' },
+  'Git Commit': { Icon: CommitIcon, tint: 'var(--danger)' },
+  'View Diff': { Icon: DiffIcon, tint: 'var(--workflow)' },
+  'Lint Code': { Icon: ListIcon, tint: 'var(--syntax-boolean)' },
+  'Deploy Preview': { Icon: RocketIcon, tint: 'var(--syntax-boolean)' },
+  'Fetch Docs': { Icon: BookIcon, tint: 'var(--accent-hover)' },
+}
+
+const DEFAULT_TOOL_LOOK: ToolLook = { Icon: WrenchIcon, tint: 'var(--icon)' }
 
 /** `treeVersion` is the tree's own `nodes` array — a fresh reference every
  *  time `useProjectTree` reloads, including right after this agent was
@@ -101,7 +137,10 @@ export function AgentView({ path, name, treeVersion }: Props) {
   return (
     <div className="viewer agent-view">
       <div className="agent-view__topbar">
-        <span className="agent-view__status">{STATUS_LABEL}</span>
+        <span className="agent-view__status">
+          <span className="agent-view__status-dot" aria-hidden="true" />
+          {STATUS_LABEL}
+        </span>
         <button type="button" className="btn btn--primary" onClick={() => {}}>
           Spawn
         </button>
@@ -114,6 +153,7 @@ export function AgentView({ path, name, treeVersion }: Props) {
         onEdit={() => setEditingInstructions(true)}
       />
       <ToolkitCard />
+      <StatsCard />
 
       {editingInstructions && (
         <AgentInstructionsModal
@@ -140,9 +180,9 @@ function BasicInfoCard({
 }) {
   return (
     <div className="agent-view__card">
-      <div className="agent-view__basics">
-        <div className="agent-view__basics-left">
-          <img className="agent-view__avatar" src={agentAvatar(name)} alt={name} />
+      <div className="agent-view__head">
+        <div className="agent-view__rail">
+          <img className="agent-view__rail-avatar" src={agentAvatar(name)} alt={name} />
 
           <div className="modal__field">
             <FieldLabel htmlFor="agent-view-heartbeat" tooltip={HEARTBEAT_TOOLTIP}>
@@ -211,27 +251,27 @@ function BasicInfoCard({
           </div>
         </div>
 
-        <div className="agent-view__basics-right">
+        <div className="agent-view__ident">
           <h2 className="agent-view__name">{name}</h2>
           {data.title && <p className="agent-view__title">{data.title}</p>}
 
           <div className="agent-view__buttons">
-            <button type="button" className="btn" disabled>
+            <button type="button" className="btn btn--sm" disabled>
               Logs
             </button>
-            <button type="button" className="btn" disabled>
+            <button type="button" className="btn btn--sm" disabled>
               Open session
             </button>
           </div>
 
-          <div className="agent-view__field">
-            <span className="modal__label">Description</span>
-            <p className="agent-view__field-text">{data.description}</p>
+          <div className="agent-view__meta">
+            <span className="agent-view__meta-label">Description</span>
+            <p className="agent-view__meta-text">{data.description}</p>
           </div>
 
-          <div className="agent-view__field">
-            <span className="modal__label">Mission</span>
-            <p className="agent-view__field-text">{data.mission}</p>
+          <div className="agent-view__meta">
+            <span className="agent-view__meta-label">Mission</span>
+            <p className="agent-view__meta-text">{data.mission}</p>
           </div>
         </div>
       </div>
@@ -255,7 +295,7 @@ function InstructionsCard({
     <div className="agent-view__card">
       <div className="agent-view__card-header">
         <h3 className="agent-view__card-title">Instructions</h3>
-        <button type="button" className="btn" onClick={onEdit}>
+        <button type="button" className="btn btn--sm" onClick={onEdit}>
           Edit
         </button>
       </div>
@@ -267,7 +307,9 @@ function InstructionsCard({
       ) : content.trim() === '' ? (
         <p className="empty-state">No instructions set</p>
       ) : (
-        <SafeMarkdown content={content} />
+        <div className="agent-view__instructions">
+          <SafeMarkdown content={content} />
+        </div>
       )}
     </div>
   )
@@ -280,19 +322,40 @@ function ToolkitCard() {
     <div className="agent-view__card">
       <div className="agent-view__card-header">
         <h3 className="agent-view__card-title">Toolkit</h3>
-        <button type="button" className="btn" onClick={() => {}}>
+        <button type="button" className="btn btn--sm" onClick={() => {}}>
           Edit
         </button>
       </div>
 
       <div className="agent-view__toolkit-grid">
-        {TOOLKIT_TOOLS.map((tool) => (
-          <div className="agent-view__toolkit-item" key={tool}>
-            <span aria-hidden="true">🔧</span>
-            <span>{tool}</span>
-          </div>
-        ))}
+        {TOOLKIT_TOOLS.map((tool) => {
+          const { Icon, tint } = TOOL_LOOKS[tool] ?? DEFAULT_TOOL_LOOK
+          return (
+            <div
+              className="agent-view__tool"
+              key={tool}
+              style={{ '--tool-tint': tint } as CSSProperties}
+            >
+              <Icon className="agent-view__tool-icon" />
+              <span className="agent-view__tool-name">{tool}</span>
+            </div>
+          )
+        })}
       </div>
+    </div>
+  )
+}
+
+/** Reserved for an agent's runtime telemetry — nothing records any yet, so
+ *  the section stands empty. See the "Not yet wired" note in ../../CLAUDE.md. */
+function StatsCard() {
+  return (
+    <div className="agent-view__card">
+      <div className="agent-view__card-header">
+        <h3 className="agent-view__card-title">Stats &amp; usage</h3>
+      </div>
+
+      <p className="empty-state">No usage recorded yet</p>
     </div>
   )
 }

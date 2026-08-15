@@ -59,7 +59,7 @@ dependency-free Node API that owns the folder tree.
 | What a new project is asked for | [src/components/NewProjectDialog.tsx](src/components/NewProjectDialog.tsx) |
 | What a workflow is created/edited with, columns included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
 | What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
-| What an agent's own view renders — real profile fields, its rendered `agent.md` instructions, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
+| What an agent's own view renders — real profile fields, its rendered `agent.md` instructions, the placeholder toolkit and empty stats sections, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
 | An agent's data shape, numeric bounds/defaults, and the shared `agent.json` parser | [src/data/agent.ts](src/data/agent.ts) |
 | The slider/label controls shared by an agent's view and its dialog | [src/components/AgentFields.tsx](src/components/AgentFields.tsx) |
 | An agent view's own `agent.json` — fetch, quiet reload driven by the tree, and the debounced per-slider save | [src/hooks/useAgentProfile.ts](src/hooks/useAgentProfile.ts) |
@@ -205,10 +205,12 @@ renamed project not revisiting what was written into it.
 Opening an agent's view shows a full profile card — name, title, description,
 mission, and the four numeric settings (heartbeat, max children, handholding,
 verbosity) all come from `agent.json`, editable via
-[AgentDialog.tsx](src/components/AgentDialog.tsx); only the "Not running"
+[AgentDialog.tsx](src/components/AgentDialog.tsx); the "Not running"
 status and the Spawn/Logs/Open session controls are still UI-only sample
 values with no session model, no persistence, and no server support behind
-them; see [AgentView.tsx](src/components/AgentView.tsx).
+them, the Toolkit section is a hardcoded list with a no-op Edit, and the
+Stats & usage section below it is deliberately empty — nothing records an
+agent's runtime telemetry yet; see [AgentView.tsx](src/components/AgentView.tsx).
 The numeric sliders stay interactive in the view itself, and dragging one
 there saves it too — both the view's sliders and the modal write to the same
 `agent.json`, through `useAgentProfile.ts`'s debounced `update` and
