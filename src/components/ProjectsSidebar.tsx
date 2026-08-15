@@ -4,6 +4,7 @@ import type { CreatableType, TreeNode } from '../data/tree'
 import { expandablePaths, filterTree, locate } from '../data/tree'
 import type { ProjectTreeState } from '../hooks/useProjectTree'
 import { AgentDialog } from './AgentDialog'
+import { AgentInstructionsModal } from './AgentInstructionsModal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { NewMenu } from './NewMenu'
 import { NewProjectDialog } from './NewProjectDialog'
@@ -38,6 +39,7 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
   /** The `agents` folder a new agent is being described for, if one is. */
   const [creatingAgentIn, setCreatingAgentIn] = useState<string | null>(null)
   const [editingAgent, setEditingAgent] = useState<TreeNode | null>(null)
+  const [editingAgentInstructions, setEditingAgentInstructions] = useState<TreeNode | null>(null)
   const [filterQuery, setFilterQuery] = useState('')
   /**
    * Paths the user has manually collapsed while a filter is active. A filter
@@ -166,6 +168,7 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
             onEditWorkflow={setEditingWorkflow}
             onAddAgent={setCreatingAgentIn}
             onEditAgent={setEditingAgent}
+            onEditAgentInstructions={setEditingAgentInstructions}
           />
         ) : (
           !tree.error && (
@@ -261,6 +264,17 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
             setEditingAgent(null)
           }}
           onCancel={() => setEditingAgent(null)}
+        />
+      )}
+
+      {editingAgentInstructions && (
+        <AgentInstructionsModal
+          path={editingAgentInstructions.path}
+          onSave={async (instructions) => {
+            await tree.updateAgentInstructions(editingAgentInstructions.path, instructions)
+            setEditingAgentInstructions(null)
+          }}
+          onCancel={() => setEditingAgentInstructions(null)}
         />
       )}
     </aside>

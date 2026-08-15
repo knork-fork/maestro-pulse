@@ -46,8 +46,9 @@ dependency-free Node API that owns the folder tree.
 | Tree state — nodes, expansion, selection, and the mutations | [src/hooks/useProjectTree.ts](src/hooks/useProjectTree.ts) |
 | Main pane — the states of showing a file | [src/components/MainPane.tsx](src/components/MainPane.tsx) |
 | Which files can be opened, and what renders each | [src/views/registry.ts](src/views/registry.ts) |
-| The markdown view, and its link/image policy | [src/views/MarkdownView.tsx](src/views/MarkdownView.tsx) |
+| The rendered-markdown view (README.md only), its link/image policy, and `SafeMarkdown` — the renderer reused for non-file markdown like an agent's instructions | [src/views/MarkdownView.tsx](src/views/MarkdownView.tsx) |
 | The JSON view — pretty-printing and colouring | [src/views/JsonView.tsx](src/views/JsonView.tsx) |
+| The raw-text view — any other markdown (e.g. `agent.md`), shown unrendered | [src/views/RawTextView.tsx](src/views/RawTextView.tsx) |
 | Reading one file's text, and the races that come with it | [src/hooks/useFileContent.ts](src/hooks/useFileContent.ts) |
 | Calling the API, and turning its failures into messages | [src/data/api.ts](src/data/api.ts) |
 | `TreeNode` and the predicates the UI branches on | [src/data/tree.ts](src/data/tree.ts) |
@@ -58,10 +59,13 @@ dependency-free Node API that owns the folder tree.
 | What a new project is asked for | [src/components/NewProjectDialog.tsx](src/components/NewProjectDialog.tsx) |
 | What a workflow is created/edited with, columns included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
 | What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
-| What an agent's own view renders — real profile fields, sample pulse actions, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
+| What an agent's own view renders — real profile fields, its rendered `agent.md` instructions, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
 | An agent's data shape, numeric bounds/defaults, and the shared `agent.json` parser | [src/data/agent.ts](src/data/agent.ts) |
 | The slider/label controls shared by an agent's view and its dialog | [src/components/AgentFields.tsx](src/components/AgentFields.tsx) |
-| An agent view's own data — fetch, quiet reload driven by the tree, and the debounced per-slider save | [src/hooks/useAgentProfile.ts](src/hooks/useAgentProfile.ts) |
+| An agent view's own `agent.json` — fetch, quiet reload driven by the tree, and the debounced per-slider save | [src/hooks/useAgentProfile.ts](src/hooks/useAgentProfile.ts) |
+| An agent's own `agent.md` — fetch, quiet reload driven by the tree, and `save` for the view's own Edit button | [src/hooks/useAgentInstructions.ts](src/hooks/useAgentInstructions.ts) |
+| The raw-markdown editor for `agent.md`, with tips and a role-template picker — reachable from the view's Instructions card and the tree's "Edit instructions" row | [src/components/AgentInstructionsModal.tsx](src/components/AgentInstructionsModal.tsx) |
+| The role templates (coder, reviewer, security specialist, researcher, QA, salesperson, PM, product manager) the instructions editor's template picker offers | [src/data/agentTemplates.ts](src/data/agentTemplates.ts) |
 | A workflow's kanban board — columns, bot/human column styling, per-card move/delete/archive controls, the read-only card detail modal, and the Backlog-only "add a ticket" button | [src/components/KanbanBoard.tsx](src/components/KanbanBoard.tsx), [src/components/Column.tsx](src/components/Column.tsx), [src/components/Card.tsx](src/components/Card.tsx), [src/components/CardMoveMenu.tsx](src/components/CardMoveMenu.tsx), [src/components/CardDetailModal.tsx](src/components/CardDetailModal.tsx) |
 | The instructional modal a Backlog "+" click opens — builds the add-to-backlog skill URL for an external agent to fetch, never calls the API itself | [src/components/AddToBacklogModal.tsx](src/components/AddToBacklogModal.tsx) |
 | A workflow board's own data — fetch, quiet 60s poll, an immediate quiet reload whenever the tree reloads, and the per-card move/delete/archive mutations (moves guarded against a stale column) | [src/hooks/useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) |
@@ -174,7 +178,9 @@ stays unaware any of this is happening; it just renders whatever `nodes` and
 
 ### Not yet wired
 
-Only files a view claims can be opened at all — every other file row is inert. Nothing serves a project's raw bytes, so
+Only files a view claims can be opened at all — every other file row is inert. Markdown other than README.md
+is claimed but shown unrendered (see [RawTextView.tsx](src/views/RawTextView.tsx)) rather than being inert, since
+`agent.md` is meant to be read/edited as source. Nothing serves a project's raw bytes, so
 relative images and links inside a rendered file cannot resolve and are shown as
 unresolved rather than followed. Nothing re-reads a file that changes on disk
 under an open view, except a workflow's board, which polls (see
@@ -200,9 +206,9 @@ Opening an agent's view shows a full profile card — name, title, description,
 mission, and the four numeric settings (heartbeat, max children, handholding,
 verbosity) all come from `agent.json`, editable via
 [AgentDialog.tsx](src/components/AgentDialog.tsx); only the "Not running"
-status, the Spawn/Logs/Open session controls, and the Pulse Actions list are
-still UI-only sample values with no session model, no persistence, and no
-server support behind them; see [AgentView.tsx](src/components/AgentView.tsx).
+status and the Spawn/Logs/Open session controls are still UI-only sample
+values with no session model, no persistence, and no server support behind
+them; see [AgentView.tsx](src/components/AgentView.tsx).
 The numeric sliders stay interactive in the view itself, and dragging one
 there saves it too — both the view's sliders and the modal write to the same
 `agent.json`, through `useAgentProfile.ts`'s debounced `update` and
@@ -211,6 +217,23 @@ defaults, and the shared parser live in
 [src/data/agent.ts](src/data/agent.ts); the slider/label controls both
 `AgentView.tsx` and `AgentDialog.tsx` render with are shared from
 [src/components/AgentFields.tsx](src/components/AgentFields.tsx).
+The view's Instructions card replaces what used to be a hardcoded sample
+list: it renders the agent's real `agent.md` (via `SafeMarkdown`, loaded and
+quiet-reloaded by [useAgentInstructions.ts](src/hooks/useAgentInstructions.ts)
+the same way `agent.json` is), and its own "Edit" button opens
+[AgentInstructionsModal.tsx](src/components/AgentInstructionsModal.tsx) — a
+raw-markdown editor (not a preview) with tips and a "Templates" button
+autofilling one of [agentTemplates.ts](src/data/agentTemplates.ts)'s role
+skeletons. The same modal is also reachable from the tree's "Edit
+instructions" context-menu row on an agent node
+([ProjectTree.tsx](src/components/ProjectTree.tsx)), which saves through
+`tree.updateAgentInstructions` in
+[useProjectTree.ts](src/hooks/useProjectTree.ts) instead — deliberately
+separate write paths, same dual-path shape `agent.json` itself already has
+between the view's sliders and the sidebar's dialog. `agent.md` is
+scaffolded with a placeholder on creation and is never touched by an
+`agent.json` edit (description/title/mission/sliders), or vice versa — see
+`updateAgentInstructions` in [server/index.mjs](server/index.mjs).
 
 ## Data shape
 
@@ -328,7 +351,12 @@ a workflow's columns, so its own content (`agent.json`) is just its
 settings, see [src/data/agent.ts](src/data/agent.ts) — editable the same
 narrow way through `updateEntry`, which validates it server-side against the
 same bounds `agent.ts` declares; its name is likewise
-fixed. Opening an agent's view is a synthetic selection mirroring a workflow's
+fixed. An agent additionally gets `agent.md` alongside `agent.json` — its
+system/personalization instructions as raw markdown, scaffolded with a
+placeholder (`DEFAULT_AGENT_INSTRUCTIONS`) only on creation, and edited
+through its own route, `PUT /api/agent-instructions`
+(`updateAgentInstructions`), entirely separate from `updateEntry` so neither
+file's edits touch the other. Opening an agent's view is a synthetic selection mirroring a workflow's
 board — see `agentViewPath`/`parseAgentViewPath` in
 [tree.ts](src/data/tree.ts). A workflow's bot columns can be assigned one of
 the agents living under the same project; [ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx)

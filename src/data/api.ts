@@ -69,6 +69,12 @@ export const fetchFile = (path: string) =>
     `/file?path=${encodeURIComponent(path)}`,
   ).then((body) => body.content)
 
+/** Whether a `fetchFile` rejection means "does not exist yet" rather than a
+ *  real failure — matches `getFile`'s own message in server/index.mjs. Used
+ *  where a missing file is expected and has a sensible empty fallback, e.g.
+ *  an agent created before `agent.md` existed. */
+export const isMissingFileError = (message: string) => message.startsWith('No such file')
+
 /** Rejects if `name` is taken, which is what the draft row reports. */
 export const createFolder = (parent: string, name: string) =>
   request<{ path: string }>('POST', '/entries', { parent, type: 'folder', name }).then(
@@ -151,6 +157,14 @@ export const updateAgent = (path: string, edits: AgentEdits) =>
 /** Where an agent's saved data lives, for `fetchFile` to read when
  *  prefilling the edit dialog. */
 export const agentFilePath = (agentPath: string) => `${agentPath}/agent.json`
+
+/** Where an agent's system/personalization instructions live — a separate
+ *  file from `agent.json`, written independently of it. */
+export const agentInstructionsPath = (agentPath: string) => `${agentPath}/agent.md`
+
+/** Overwrites an existing agent's `agent.md`. Never touches `agent.json`. */
+export const updateAgentInstructions = (path: string, instructions: string) =>
+  request<{ path: string }>('PUT', '/agent-instructions', { path, instructions }).then(() => undefined)
 
 /** Resolves to the entry's new path, which differs from the old one. */
 export const renameEntry = (path: string, name: string) =>

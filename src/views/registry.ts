@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import type { FileNode, TreeNode } from '../data/tree'
 import { JsonView } from './JsonView'
 import { MarkdownView } from './MarkdownView'
+import { RawTextView } from './RawTextView'
 
 /**
  * Which files the main pane can show, and what shows them.
@@ -73,6 +74,9 @@ export const every =
 const VIEWS: FileView[] = [
   { id: 'readme', matches: named('README.md'), render: MarkdownView },
   { id: 'json', matches: extension('.json'), render: JsonView },
+  // Any other markdown (e.g. agent.md, a system prompt) is meant to be read
+  // and edited as source, not previewed — only README.md gets rendered.
+  { id: 'raw-markdown', matches: extension('.md'), render: RawTextView },
 ]
 
 export const viewFor = (context: FileContext): FileView | null =>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   HANDHOLDING_DESCRIPTIONS,
   HANDHOLDING_MAX,
@@ -20,19 +20,14 @@ import {
   VERBOSITY_TOOLTIP,
 } from '../data/agent'
 import type { AgentData } from '../data/agent'
+import { useAgentInstructions } from '../hooks/useAgentInstructions'
 import { useAgentProfile } from '../hooks/useAgentProfile'
+import { AgentInstructionsModal } from './AgentInstructionsModal'
 import { FieldLabel, RangeField } from './AgentFields'
 import { agentAvatar } from './avatar'
+import { SafeMarkdown } from '../views/MarkdownView'
 
 const STATUS_LABEL = 'Not running'
-
-const PULSE_ACTIONS = [
-  'Check the shared task queue for anything new or reassigned.',
-  'Re-read items already in progress and note what changed since the last pulse.',
-  'Run any pending tool calls needed to move blocked work forward.',
-  'Summarize progress and post a short status update.',
-  'Flag anything that looks stuck or needs a human decision.',
-]
 
 /** `treeVersion` is the tree's own `nodes` array — a fresh reference every
  *  time `useProjectTree` reloads, including right after this agent was
@@ -45,21 +40,29 @@ type Props = { path: string; name: string; treeVersion: unknown }
 /**
  * An agent's own profile — `name`, `title`, `description`, `mission`, and the
  * four numeric settings all come from `agent.json` now, and dragging a
- * slider here saves it (debounced) via `useAgentProfile`. Only the "Not
- * running" status, Spawn/Logs/Open session controls, and the Pulse Actions
- * list below remain sample UI data with nothing behind them yet. See the
- * "Not yet wired" note in ../../CLAUDE.md.
+ * slider here saves it (debounced) via `useAgentProfile`. The Instructions
+ * card below renders `agent.md` (see `useAgentInstructions`), editable here
+ * or from the tree's context menu. Only the "Not running" status and the
+ * Spawn/Logs/Open session controls remain sample UI data with nothing behind
+ * them yet. See the "Not yet wired" note in ../../CLAUDE.md.
  */
 export function AgentView({ path, name, treeVersion }: Props) {
   const { data, error, loading, reload, update } = useAgentProfile(path)
-  /** Skips the redundant reload on mount — `useAgentProfile` already loads
-   *  itself then; this effect only needs to fire on a *later* tree reload. */
+  const instructions = useAgentInstructions(path)
+  const [editingInstructions, setEditingInstructions] = useState(false)
+  /** Skips the redundant reload on mount — `useAgentProfile`/
+   *  `useAgentInstructions` already load themselves then; this effect only
+   *  needs to fire on a *later* tree reload. */
   const mounted = useRef(false)
 
   useEffect(() => {
-    if (mounted.current) void reload(true)
-    else mounted.current = true
-  }, [treeVersion, reload])
+    if (mounted.current) {
+      void reload(true)
+      void instructions.reload(true)
+    } else {
+      mounted.current = true
+    }
+  }, [treeVersion, reload, instructions.reload])
 
   if (loading) {
     return (
@@ -89,7 +92,22 @@ export function AgentView({ path, name, treeVersion }: Props) {
       </div>
 
       <BasicInfoCard name={name} data={data} onChange={update} />
-      <PulseActionsCard />
+      <InstructionsCard
+        content={instructions.content}
+        error={instructions.error}
+        onEdit={() => setEditingInstructions(true)}
+      />
+
+      {editingInstructions && (
+        <AgentInstructionsModal
+          path={path}
+          onSave={async (text) => {
+            await instructions.save(text)
+            setEditingInstructions(false)
+          }}
+          onCancel={() => setEditingInstructions(false)}
+        />
+      )}
     </div>
   )
 }
@@ -204,18 +222,36 @@ function BasicInfoCard({
   )
 }
 
-function PulseActionsCard() {
+/** Renders `agent.md` — the agent's real system/personalization prompt —
+ *  with an Edit button that opens `AgentInstructionsModal`. Editing is also
+ *  reachable from the tree's "Edit instructions" context menu row. */
+function InstructionsCard({
+  content,
+  error,
+  onEdit,
+}: {
+  content: string | null
+  error: string | null
+  onEdit: () => void
+}) {
   return (
     <div className="agent-view__card">
-      <h3 className="agent-view__card-title">Pulse Actions</h3>
-      <ul className="agent-view__pulse-list">
-        {PULSE_ACTIONS.map((step, index) => (
-          <li key={step} className="agent-view__pulse-item">
-            <span className="agent-view__pulse-index">{index + 1}</span>
-            <span className="agent-view__pulse-text">{step}</span>
-          </li>
-        ))}
-      </ul>
+      <div className="agent-view__card-header">
+        <h3 className="agent-view__card-title">Instructions</h3>
+        <button type="button" className="btn" onClick={onEdit}>
+          Edit
+        </button>
+      </div>
+
+      {content === null ? (
+        <p className="viewer__error" role="alert">
+          {error ?? "This agent's instructions could not be read."}
+        </p>
+      ) : content.trim() === '' ? (
+        <p className="empty-state">No instructions set</p>
+      ) : (
+        <SafeMarkdown content={content} />
+      )}
     </div>
   )
 }

@@ -63,6 +63,19 @@ const CARD_ACTIONS = ['move-up', 'move-down', 'move-right', 'delete', 'archive']
 const AGENT_FILE = 'agent.json'
 
 /**
+ * An agent's system/personalization prompt, as raw markdown — a second file
+ * alongside AGENT_FILE, scaffolded once on creation and edited independently
+ * of it thereafter (see `updateAgentInstructions`), so an `agent.json` edit
+ * (description/title/mission/sliders) never touches it.
+ */
+const AGENT_INSTRUCTIONS_FILE = 'agent.md'
+const MAX_INSTRUCTIONS_LENGTH = 20000
+const DEFAULT_AGENT_INSTRUCTIONS =
+  '# Instructions\n\n' +
+  'Please fill system and personalization instructions for this agent — its ' +
+  'role, responsibilities, tone, and any constraints it should follow.\n'
+
+/**
  * An agent's numeric settings' bounds and defaults. Mirrors
  * src/data/agent.ts exactly — the client's sliders can't produce an
  * out-of-range value, but a hand-crafted request could, so both sides need
@@ -120,6 +133,7 @@ const routes = {
   'DELETE /api/entry': deleteEntry,
   'PATCH /api/workflow-cards': updateWorkflowCard,
   'POST /api/workflow-cards': createWorkflowCard,
+  'PUT /api/agent-instructions': updateAgentInstructions,
   'GET /skills/add-to-backlog': getAddToBacklogSkill,
 }
 
@@ -200,7 +214,10 @@ async function createEntry(req) {
     try {
       if (type === 'project') await scaffoldProject(abs, details)
       else if (type === 'workflow') await scaffoldWorkflow(abs, details)
-      else await scaffoldAgent(abs, details)
+      else {
+        await scaffoldAgent(abs, details)
+        await writeFile(path.join(abs, AGENT_INSTRUCTIONS_FILE), DEFAULT_AGENT_INSTRUCTIONS)
+      }
     } catch (error) {
       // Half a project (or workflow) is worse than none, and the directory is
       // ours: undo it.
@@ -240,6 +257,30 @@ async function updateEntry(req) {
           })
         : scaffoldAgent(abs, validAgentDetails(body)),
     `No such ${type}: ${target}`,
+  )
+
+  return { status: 200, body: { path: target } }
+}
+
+/**
+ * Overwrites an existing agent's `agent.md` — its own narrow route, separate
+ * from `updateEntry`, so editing `agent.json` (description/title/mission/
+ * sliders) can never clobber this file and vice versa.
+ */
+async function updateAgentInstructions(req) {
+  const body = await readJson(req)
+  const target = relativePath(body.path)
+  const abs = path.join(ROOT, target)
+
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'agent') {
+    throw new HttpError(404, `No such agent: ${target}`)
+  }
+
+  const instructions = validInstructions(body.instructions)
+
+  await guardFs(
+    () => writeFile(path.join(abs, AGENT_INSTRUCTIONS_FILE), instructions ? `${instructions}\n` : ''),
+    `No such agent: ${target}`,
   )
 
   return { status: 200, body: { path: target } }
@@ -802,6 +843,19 @@ function optionalText(input, field) {
   const value = typeof input === 'string' ? input.trim() : ''
   if (value.length > MAX_TEXT_LENGTH) throw new HttpError(400, `That ${field} is too long`)
   if (value.includes('\0')) throw new HttpError(400, `Invalid ${field}`)
+
+  return value
+}
+
+/**
+ * An agent's `agent.md` body — far longer than any other free text field
+ * (`MAX_TEXT_LENGTH`), since it is a system prompt rather than a label, and
+ * empty is valid: nothing forces an agent to keep non-blank instructions.
+ */
+function validInstructions(input) {
+  const value = typeof input === 'string' ? input.trim() : ''
+  if (value.length > MAX_INSTRUCTIONS_LENGTH) throw new HttpError(400, 'Instructions are too long')
+  if (value.includes('\0')) throw new HttpError(400, 'Invalid instructions')
 
   return value
 }

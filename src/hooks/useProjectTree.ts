@@ -135,6 +135,17 @@ export function useProjectTree() {
     [load],
   )
 
+  const updateAgentInstructions = useCallback(
+    async (path: string, instructions: string) => {
+      await api.updateAgentInstructions(path, instructions)
+      // Bumps `nodes` so an already-open AgentView for this agent quiet-
+      // reloads `agent.md` via its own `treeVersion` effect — same
+      // convention `updateAgent` establishes for `agent.json`.
+      await load()
+    },
+    [load],
+  )
+
   const rename = useCallback(
     async (path: string, name: string) => {
       const next = await api.renameEntry(path, name)
@@ -173,6 +184,7 @@ export function useProjectTree() {
     updateWorkflow,
     createAgent,
     updateAgent,
+    updateAgentInstructions,
     rename,
     remove,
   }
