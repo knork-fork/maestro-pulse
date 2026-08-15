@@ -238,7 +238,9 @@ function TreeItem({ node, parent, depth }: ItemProps) {
           }}
         >
           <Glyphs node={node} open={open} />
-          <span className="tree__label">{node.name}</span>
+          <span className={classes(['tree__label', node.type === 'project' && 'tree__label--project'])}>
+            {node.name}
+          </span>
         </button>
 
         {acceptsNewChildren(node) && (
@@ -389,6 +391,11 @@ function Glyphs({ node, open }: { node: TreeNode; open: boolean }) {
       )}
       {node.type === 'file' ? (
         <FileIcon className="tree__icon" />
+      ) : node.type === 'project' ? (
+        <span className="tree__icon-wrap">
+          <FolderIcon className="tree__icon tree__icon--folder" />
+          <span className="tree__icon-badge" aria-hidden="true" />
+        </span>
       ) : (
         <FolderIcon className="tree__icon tree__icon--folder" />
       )}
