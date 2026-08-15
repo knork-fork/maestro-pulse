@@ -223,8 +223,12 @@ a directory on the *user's own machine*. That path is only ever written down —
 the api container cannot see it, and deliberately never resolves or touches it.
 Scaffolding is the API's job, not the client's, so what a project *is* has one
 answer on the side that owns the filesystem; see `scaffoldProject`. Unlike the
-marker, what it writes is ordinary content: visible in the tree, and the user's
-to edit afterwards.
+marker, most of what it writes is ordinary content: visible in the tree, and
+the user's to edit afterwards. The one exception is `project.json` itself —
+since it holds that host path, it's gitignored (a scaffolded `.gitignore`,
+invisible in the tree the same way the marker is), alongside a
+`project.json.dist` sibling that documents the same shape with a placeholder
+in place of the real path, for the user's repo to actually track.
 
 A `workflow` is marked the same way a `project` is, one level down: right-clicking
 a project's `workflows` folder is how one is created, and the fixed leading/

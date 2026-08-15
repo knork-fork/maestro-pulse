@@ -32,6 +32,8 @@ const CREATABLE_TYPES = ['folder', 'project', 'workflow', 'agent']
  * are plain contents, visible in the tree and theirs to edit afterwards.
  */
 const PROJECT_FILE = 'project.json'
+const PROJECT_FILE_TEMPLATE = `${PROJECT_FILE}.dist`
+const GITIGNORE_FILE = '.gitignore'
 const README_FILE = 'README.md'
 const PROJECT_SUBDIRECTORIES = ['agents', 'workflows', 'tools']
 
@@ -441,7 +443,10 @@ async function mkdirTyped(abs, type) {
 /**
  * Fills a freshly made project directory. The location is only ever recorded —
  * it names a directory on the user's machine that this service cannot see and
- * has no business creating or reading.
+ * has no business creating or reading. project.json holds that real path, so
+ * it's gitignored; project.json.dist documents its shape with a placeholder
+ * instead, so the file the user's repo actually tracks has nothing host-local
+ * in it.
  */
 async function scaffoldProject(abs, { name, location, description }) {
   await writeFile(
@@ -449,9 +454,11 @@ async function scaffoldProject(abs, { name, location, description }) {
     `${JSON.stringify({ dir_on_host: location }, null, 2)}\n`,
   )
   await writeFile(
-    path.join(abs, README_FILE),
-    `# ${name}\n\n${description}\n\n# Location on host\n${location}\n`,
+    path.join(abs, PROJECT_FILE_TEMPLATE),
+    `${JSON.stringify({ dir_on_host: '/path/to/project/on/host' }, null, 2)}\n`,
   )
+  await writeFile(path.join(abs, GITIGNORE_FILE), `${PROJECT_FILE}\n`)
+  await writeFile(path.join(abs, README_FILE), `# ${name}\n\n${description}\n`)
 
   for (const child of PROJECT_SUBDIRECTORIES) await mkdir(path.join(abs, child))
 }
