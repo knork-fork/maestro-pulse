@@ -316,7 +316,8 @@ the tree) would otherwise leave an already-open board stale until its next
 instant the tree does.
 
 A workflow's `workflow.json` additionally holds `cards` and `archived`, each a
-flat array of `{ id, title, description, column }`, where `column` names a
+flat array of `{ id, title, description, column, status, last_activity, issues }`,
+where `column` names a
 column by its `name` rather than an id - the same no-id convention columns
 themselves already follow (so a custom column renamed after it has cards
 orphans them; see "Not yet wired" above). A card's avatar comes from its own

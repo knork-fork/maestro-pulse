@@ -169,6 +169,7 @@ const parseCards = (value: unknown): WorkflowCard[] =>
           column?: unknown
           status?: unknown
           last_activity?: unknown
+          issues?: unknown
         }
         return typeof card.id === 'string' && typeof card.title === 'string' && typeof card.column === 'string'
           ? [
@@ -179,6 +180,23 @@ const parseCards = (value: unknown): WorkflowCard[] =>
                 column: card.column,
                 status: card.status === 'in_session' || card.status === 'blocked' ? card.status : null,
                 last_activity: typeof card.last_activity === 'string' ? card.last_activity : null,
+                issues: parseIssues(card.issues),
+              },
+            ]
+          : []
+      })
+    : []
+
+const parseIssues = (value: unknown): { title: string; is_solved: boolean; description: string }[] =>
+  Array.isArray(value)
+    ? value.flatMap((entry) => {
+        const issue = entry as { title?: unknown; is_solved?: unknown; description?: unknown }
+        return typeof issue.title === 'string'
+          ? [
+              {
+                title: issue.title,
+                is_solved: issue.is_solved === true,
+                description: typeof issue.description === 'string' ? issue.description : '',
               },
             ]
           : []

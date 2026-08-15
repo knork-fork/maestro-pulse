@@ -131,7 +131,10 @@ export type WorkflowColumn = {
  *  cosmetic — it only drives the card's outline; `null`/absent/any other
  *  value shows no outline. `last_activity` is a free-text description of
  *  the card's most recent event (e.g. a column move); `null`/absent means
- *  none yet. */
+ *  none yet. `issues` is a flat list of problems flagged on the card;
+ *  `is_solved` renders as struck-through rather than removing the entry, and
+ *  an issue's `description` shows as a hover tooltip on its `title` rather
+ *  than inline. */
 export type WorkflowCard = {
   id: string
   title: string
@@ -139,6 +142,7 @@ export type WorkflowCard = {
   column: string
   status: 'in_session' | 'blocked' | null
   last_activity: string | null
+  issues: { title: string; is_solved: boolean; description: string }[]
 }
 
 export type CardAction = 'move-up' | 'move-down' | 'move-right' | 'delete' | 'archive'
