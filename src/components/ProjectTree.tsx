@@ -218,8 +218,21 @@ function TreeItem({ node, parent, depth }: ItemProps) {
           // friends are listed, not opened, until some view claims them.
           className={classes(['tree__toggle', !expandable && !openable && 'tree__toggle--inert'])}
           onClick={() => {
-            if (expandable) onToggle(node.path)
-            else if (openable) onSelect(node.path)
+            // A workflow/agent row only ever opens — it never collapses back
+            // on its own click, since `select` (via `useProjectTree`) is what
+            // closes it, by collapsing it in favor of whichever one is opened
+            // next.
+            if (node.type === 'workflow') {
+              if (!open) onToggle(node.path)
+              onSelect(workflowBoardPath(node.path))
+            } else if (node.type === 'agent') {
+              if (!open) onToggle(node.path)
+              onSelect(agentViewPath(node.path))
+            } else if (expandable) {
+              onToggle(node.path)
+            } else if (openable) {
+              onSelect(node.path)
+            }
           }}
         >
           <Glyphs node={node} open={open} />

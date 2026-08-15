@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { TreeNode } from '../data/tree'
+import { locate, parseAgentViewPath, parseBoardPath } from '../data/tree'
 import * as api from '../data/api'
 import type { AgentEdits, NewAgentDetails, NewWorkflowDetails, ProjectDetails, WorkflowEdits } from '../data/api'
 import { usePersistentSet } from './usePersistentSet'
@@ -72,6 +73,36 @@ export function useProjectTree() {
   const reveal = useCallback(
     (path: string) => setExpanded((prev) => new Set([...prev, ...selfAndAncestors(path)])),
     [setExpanded],
+  )
+
+  /**
+   * Selecting a workflow's board or an agent's view is an accordion: only the
+   * one currently on screen stays expanded, so opening another collapses
+   * whichever workflow/agent was open before — it can otherwise never close
+   * itself (see `ProjectTree.tsx`, which refuses to toggle these two node
+   * types shut on click).
+   */
+  const select = useCallback(
+    (path: string) => {
+      setSelectedPath(path)
+
+      const target = parseBoardPath(path) ?? parseAgentViewPath(path)
+      if (!target) return
+
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        for (const candidate of prev) {
+          if (candidate === target) continue
+          const located = locate(nodes, candidate)
+          if (located && (located.node.type === 'workflow' || located.node.type === 'agent')) {
+            next.delete(candidate)
+          }
+        }
+        next.add(target)
+        return next
+      })
+    },
+    [setSelectedPath, setExpanded, nodes],
   )
 
   const createFolder = useCallback(
@@ -176,7 +207,7 @@ export function useProjectTree() {
     loaded,
     reload,
     toggle,
-    select: setSelectedPath,
+    select,
     reveal,
     createFolder,
     createProject,
