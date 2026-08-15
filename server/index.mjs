@@ -11,7 +11,9 @@
  */
 import { createServer } from 'node:http'
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const PORT = Number(process.env.PORT ?? 20445)
 const ROOT = path.resolve(process.env.PROJECTS_ROOT ?? '/resources/projects')
@@ -58,6 +60,15 @@ const CARD_ACTIONS = ['move-up', 'move-down', 'move-right', 'delete', 'archive']
  *  fields that need server-side assembly. */
 const AGENT_FILE = 'agent.json'
 
+/**
+ * The "add a backlog ticket" skill text handed to an external Claude Code
+ * session by `GET /skills/add-to-backlog` — a static template with
+ * placeholders filled in per-request. Lives next to this file so the
+ * Dockerfile's `COPY server/ ./server/` ships it with no extra step.
+ */
+const SKILLS_DIR = path.dirname(fileURLToPath(import.meta.url))
+const ADD_TO_BACKLOG_TEMPLATE = path.join(SKILLS_DIR, 'add-to-backlog-template.md')
+
 /** Bounds the recursive read against deep nesting and symlink cycles. */
 const MAX_DEPTH = 12
 const MAX_BODY_BYTES = 64 * 1024
@@ -83,6 +94,8 @@ const routes = {
   'PATCH /api/entry': renameEntry,
   'DELETE /api/entry': deleteEntry,
   'PATCH /api/workflow-cards': updateWorkflowCard,
+  'POST /api/workflow-cards': createWorkflowCard,
+  'GET /skills/add-to-backlog': getAddToBacklogSkill,
 }
 
 async function getTree() {
@@ -232,6 +245,89 @@ async function updateWorkflowCard(req) {
   }, `No such workflow: ${target}`)
 
   return { status: 200, body: { path: target } }
+}
+
+/**
+ * Adds one new card to an existing workflow's Backlog column, at the top.
+ * Unlike `updateWorkflowCard`'s actions, this grows `cards` — the one place
+ * that does, since every existing action only reorders/relabels/shrinks/
+ * transfers to `archived`. Meant to be called by an external agent following
+ * the `add-to-backlog` skill (see `getAddToBacklogSkill`), not the browser.
+ */
+async function createWorkflowCard(req) {
+  const body = await readJson(req)
+  const target = relativePath(body.path)
+  const abs = path.join(ROOT, target)
+
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
+    throw new HttpError(404, `No such workflow: ${target}`)
+  }
+
+  const title = requiredText(body.title, 'title')
+  const description = requiredText(body.description, 'description')
+  const card = { id: randomUUID(), title, description, column: FIXED_LEADING_COLUMN }
+
+  await guardFs(async () => {
+    const data = await readWorkflowJson(abs)
+    const updated = { ...data, cards: [card, ...data.cards] }
+    await writeFile(path.join(abs, WORKFLOW_FILE), `${JSON.stringify(updated, null, 2)}\n`)
+  }, `No such workflow: ${target}`)
+
+  return { status: 201, body: { id: card.id } }
+}
+
+/**
+ * Hands an external Claude Code session the "add a backlog ticket" skill:
+ * `add-to-backlog-template.md` with its placeholders swapped for the real
+ * project/workflow it was asked about. `project` is required and checked
+ * independently of `path` (rather than inferred from `path`'s first segment)
+ * so the two can't silently disagree about which project this is for.
+ * Returns raw markdown, not JSON, so a plain fetch/WebFetch reads it directly.
+ */
+async function getAddToBacklogSkill(req, url) {
+  const target = relativePath(url.searchParams.get('path'))
+  const abs = path.join(ROOT, target)
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
+    throw new HttpError(404, `No such workflow: ${target}`)
+  }
+
+  // Not a separate param: a workflow's path is always
+  // `<project>/workflows/<name>` — exactly two fixed segments below its
+  // project — so the project is fully determined by `path` and the client
+  // repeating it would be redundant. See the client-side comment in
+  // AddToBacklogModal.tsx for the same rule.
+  const project = target.split('/').slice(0, -2).join('/')
+  const projectAbs = path.join(ROOT, project)
+  if (!(await isDirectory(projectAbs)) || (await directoryType(projectAbs)) !== 'project') {
+    throw new HttpError(404, `No such project: ${project}`)
+  }
+
+  // Not a query param: nginx forwards the browser's own Host header
+  // (`proxy_set_header Host $host` in nginx.conf), so the server already
+  // knows it without the client repeating it. This deployment only ever
+  // serves plain http (see nginx.conf), so the scheme is fixed.
+  if (!req.headers.host) throw new HttpError(400, 'Missing Host header')
+  const host = `http://${req.headers.host}`
+
+  const projectJson = await guardFs(
+    () => readFile(path.join(projectAbs, PROJECT_FILE), 'utf8'),
+    `No such project: ${project}`,
+  )
+  let dirOnHost
+  try {
+    dirOnHost = JSON.parse(projectJson).dir_on_host
+  } catch {
+    throw new HttpError(500, 'project.json is not valid JSON')
+  }
+
+  const template = await readFile(ADD_TO_BACKLOG_TEMPLATE, 'utf8')
+  const filled = template
+    .replaceAll('{{PROJECT_NAME}}', project)
+    .replaceAll('{{DIR_ON_HOST}}', String(dirOnHost))
+    .replaceAll('{{HOST_URL}}', host)
+    .replaceAll('{{WORKFLOW_PATH}}', target)
+
+  return { status: 200, body: filled, raw: true }
 }
 
 async function renameEntry(req) {
@@ -774,6 +870,17 @@ function send(res, status, body) {
   res.end(payload)
 }
 
+/** Same no-store rule as `send`, but for a handler that answers with plain
+ *  text instead of JSON — see `getAddToBacklogSkill`. */
+function sendText(res, status, text) {
+  res.writeHead(status, {
+    'Content-Type': 'text/markdown; charset=utf-8',
+    'Content-Length': Buffer.byteLength(text),
+    'Cache-Control': 'no-store',
+  })
+  res.end(text)
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost')
   const route = `${req.method} ${url.pathname}`
@@ -785,7 +892,8 @@ const server = createServer(async (req, res) => {
 
     const result = await handler(req, url)
     status = result.status
-    send(res, result.status, result.body)
+    if (result.raw) sendText(res, result.status, result.body)
+    else send(res, result.status, result.body)
   } catch (error) {
     status = error instanceof HttpError ? error.status : 500
     if (status === 500) console.error(error)

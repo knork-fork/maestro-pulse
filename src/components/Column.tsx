@@ -1,6 +1,7 @@
 import type { WorkflowCard, WorkflowColumn } from '../data/api'
 import { Card } from './Card'
 import { classes } from './classes'
+import { PlusIcon } from './icons'
 
 type Props = {
   column: WorkflowColumn
@@ -16,6 +17,8 @@ type Props = {
   onMoveUp: (card: WorkflowCard) => Promise<void>
   onMoveDown: (card: WorkflowCard) => Promise<void>
   onMoveRight: (card: WorkflowCard) => Promise<void>
+  /** Only ever passed for the Backlog column — see `isFirst`. */
+  onAdd?: () => void
 }
 
 /**
@@ -36,6 +39,7 @@ export function Column({
   onMoveUp,
   onMoveDown,
   onMoveRight,
+  onAdd,
 }: Props) {
   const isBot = column.bot
   // An agent's display name is its directory name, which is also the last
@@ -51,6 +55,18 @@ export function Column({
           </span>
         )}
         <span className="column__name">{column.name}</span>
+
+        {isFirst && onAdd && (
+          <button
+            type="button"
+            className="icon-btn icon-btn--sm column__add"
+            title="Add a backlog ticket"
+            aria-label="Add a backlog ticket"
+            onClick={onAdd}
+          >
+            <PlusIcon />
+          </button>
+        )}
       </div>
 
       <ul className="column__cards">

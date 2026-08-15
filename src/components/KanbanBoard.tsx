@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { WorkflowCard } from '../data/api'
 import { useWorkflowBoard } from '../hooks/useWorkflowBoard'
+import { AddToBacklogModal } from './AddToBacklogModal'
 import { CardDetailModal } from './CardDetailModal'
 import { Column } from './Column'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -23,6 +24,7 @@ export function KanbanBoard({ path, name, treeVersion }: Props) {
   const state = useWorkflowBoard(path)
   const [openCard, setOpenCard] = useState<WorkflowCard | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<WorkflowCard | null>(null)
+  const [addingToBacklog, setAddingToBacklog] = useState(false)
   /** Skips the redundant reload on mount — `useWorkflowBoard` already loads
    *  itself then; this effect only needs to fire on a *later* tree reload. */
   const mounted = useRef(false)
@@ -107,6 +109,7 @@ export function KanbanBoard({ path, name, treeVersion }: Props) {
             onMoveUp={(card) => state.moveUp(card.id, card.column)}
             onMoveDown={(card) => state.moveDown(card.id, card.column)}
             onMoveRight={(card) => state.moveRight(card.id, card.column)}
+            onAdd={index === 0 ? () => setAddingToBacklog(true) : undefined}
           />
         ))}
       </div>
@@ -125,6 +128,10 @@ export function KanbanBoard({ path, name, treeVersion }: Props) {
           }}
           onCancel={() => setConfirmDelete(null)}
         />
+      )}
+
+      {addingToBacklog && (
+        <AddToBacklogModal path={path} onCancel={() => setAddingToBacklog(false)} />
       )}
     </div>
   )

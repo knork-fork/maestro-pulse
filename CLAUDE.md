@@ -59,7 +59,8 @@ dependency-free Node API that owns the folder tree.
 | What a workflow is created/edited with, columns included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
 | What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
 | What an agent's own view renders — profile, dummy heartbeat/max-children/mission, sample pulse actions, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
-| A workflow's kanban board — columns, bot/human column styling, per-card move/delete/archive controls, and the read-only card detail modal | [src/components/KanbanBoard.tsx](src/components/KanbanBoard.tsx), [src/components/Column.tsx](src/components/Column.tsx), [src/components/Card.tsx](src/components/Card.tsx), [src/components/CardMoveMenu.tsx](src/components/CardMoveMenu.tsx), [src/components/CardDetailModal.tsx](src/components/CardDetailModal.tsx) |
+| A workflow's kanban board — columns, bot/human column styling, per-card move/delete/archive controls, the read-only card detail modal, and the Backlog-only "add a ticket" button | [src/components/KanbanBoard.tsx](src/components/KanbanBoard.tsx), [src/components/Column.tsx](src/components/Column.tsx), [src/components/Card.tsx](src/components/Card.tsx), [src/components/CardMoveMenu.tsx](src/components/CardMoveMenu.tsx), [src/components/CardDetailModal.tsx](src/components/CardDetailModal.tsx) |
+| The instructional modal a Backlog "+" click opens — builds the add-to-backlog skill URL for an external agent to fetch, never calls the API itself | [src/components/AddToBacklogModal.tsx](src/components/AddToBacklogModal.tsx) |
 | A workflow board's own data — fetch, quiet 60s poll, an immediate quiet reload whenever the tree reloads, and the per-card move/delete/archive mutations (moves guarded against a stale column) | [src/hooks/useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) |
 | Rename dialog / delete confirmation | [src/components/RenameDialog.tsx](src/components/RenameDialog.tsx), [src/components/ConfirmDialog.tsx](src/components/ConfirmDialog.tsx) |
 | Pending + error state for one user action | [src/hooks/useAsyncAction.ts](src/hooks/useAsyncAction.ts) |
@@ -71,7 +72,8 @@ dependency-free Node API that owns the folder tree.
 | Build tooling + dependencies | [package.json](package.json), [vite.config.ts](vite.config.ts), [tsconfig.json](tsconfig.json) |
 | CI check (typecheck) | [scripts/ci.sh](scripts/ci.sh) |
 | Three-stage image (SPA build → api → nginx serve) | [Dockerfile](Dockerfile) |
-| nginx server, listen port, and the API proxy | [nginx.conf](nginx.conf) |
+| nginx server, listen port, the API proxy, and the skills proxy | [nginx.conf](nginx.conf) |
+| The add-to-backlog skill template, filled in per-request and handed to an external Claude Code session | [server/add-to-backlog-template.md](server/add-to-backlog-template.md) |
 | Both services, host port, and the store's bind mount | [docker-compose.yml](docker-compose.yml) |
 | User-facing run instructions | [README.md](README.md) |
 
@@ -84,9 +86,12 @@ browser ──▶ web (nginx :20444) ──▶ api (node :20445) ──▶ ./res
 
 The browser only ever talks to nginx, which serves the built SPA and proxies the
 `/api` prefix to the api service — so the frontend has no cross-origin concern
-and the API is not published to the host. Unknown paths fall back to
+and the API is not published to the host. `/skills` is proxied the same way,
+but is not part of the SPA's own API surface — it exists to be fetched
+directly by an external Claude Code session (see the add-to-backlog flow
+below), not by the browser. Unknown paths fall back to
 `index.html`, so a client-side router can be added without touching the server
-config. Both rules live in [nginx.conf](nginx.conf).
+config. All three rules live in [nginx.conf](nginx.conf).
 
 The api service is the only thing that touches the filesystem. Its root is
 `resources/projects`, bind-mounted from the working tree, and every path in a
@@ -175,9 +180,12 @@ renaming one does not revisit what was written into it. A workflow's own
 description/columns *are* editable after creation (unlike a project) — only
 its name is fixed; the same is true of an agent's description. Opening a
 workflow's board now renders its cards (see
-[KanbanBoard.tsx](src/components/KanbanBoard.tsx)), but there is still no way
-to create a card through the UI at all - the only way to add one is a direct
-edit to `workflow.json`. Any editable column (Ready, Doing, or a custom one)
+[KanbanBoard.tsx](src/components/KanbanBoard.tsx)). The Backlog column's "+"
+button does not create a card through the UI either — it only opens
+[AddToBacklogModal.tsx](src/components/AddToBacklogModal.tsx), which hands the
+user text to paste into an external Claude Code session; that session is what
+actually calls the API (see the data-shape section below). There is still no
+way for the browser itself to create a card. Any editable column (Ready, Doing, or a custom one)
 renamed via [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) after it
 has cards orphans them rather than migrating them, the same class of gap as a
 renamed project not revisiting what was written into it.
@@ -265,13 +273,32 @@ these two arrays through rather than assuming a brand-new workflow; see
 against a column's fixed position (Backlog/Done are always index 0/last) and
 its `bot` flag by `applyCardAction`, behind the narrow, type-checked
 `PATCH /api/workflow-cards` route; see
-`updateWorkflowCard` in [server/index.mjs](server/index.mjs). There is no
-endpoint that creates a card - seeding one requires editing `workflow.json`
-directly. Before sending a move, the client separately re-fetches and refuses
-to proceed if the card has already left the column it was in when the user
-acted — a client-side guard only, since the server already independently
-re-validates the same action; see `moveUp`/`moveDown`/`moveRight` in
+`updateWorkflowCard` in [server/index.mjs](server/index.mjs). Before sending a
+move, the client separately re-fetches and refuses to proceed if the card has
+already left the column it was in when the user acted — a client-side guard
+only, since the server already independently re-validates the same action;
+see `moveUp`/`moveDown`/`moveRight` in
 [useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts).
+
+Creating a card is the one action that grows `cards` rather than
+reordering/relabelling/shrinking it, so it is its own route,
+`POST /api/workflow-cards` (`createWorkflowCard`), always landing the new card
+at the front of the array — i.e. the top of Backlog, since column order is
+purely relative position within the flat array (see above). Nothing in this
+repo's own frontend calls it; it exists for an external Claude Code session to
+call, per the instructions handed out by `GET /skills/add-to-backlog`
+(`getAddToBacklogSkill`). That route's only param is the workflow `path` — a
+workflow's path is always its project's path plus the fixed two-segment
+`workflows/<name>` suffix, so the project is fully determined by `path` and
+the server derives it (rather than being told it, which would just be the
+same value twice); [AddToBacklogModal.tsx](src/components/AddToBacklogModal.tsx)
+never computes it at all. The browser's own host is likewise not a param —
+the server reads it off the proxied request's own `Host` header instead (see
+nginx's `proxy_set_header Host $host`). The route
+returns [add-to-backlog-template.md](server/add-to-backlog-template.md) with
+its placeholders swapped for that project's real name, its `dir_on_host`
+(from `project.json`), and that host — as raw markdown, not JSON, the one
+route in this API that isn't.
 
 An `agent` is marked and created the same way, one level down inside a
 project's `agents` folder instead — see `scaffoldAgent` in

@@ -447,6 +447,10 @@ body {
   font-weight: 600;
 }
 
+.column__add {
+  margin-left: auto;
+}
+
 /* The one bot/human distinction — a small emoji, not a border or a solid
    icon, so it doesn't compete for attention with every human column next
    to it. */
@@ -960,6 +964,20 @@ body {
   margin: 0;
   color: var(--text-dim);
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.modal__code {
+  margin: 10px 0 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
