@@ -16,10 +16,13 @@ export type ProjectDetails = {
 
 /** One column a workflow's own creator added — the fixed Backlog/Done are
  *  never part of this: the server adds them unconditionally. Ready and Doing
- *  are ordinary columns like any other, just seeded by default. */
+ *  are ordinary columns like any other, just seeded by default. A bot column
+ *  must also name the agent that runs it; a human column's `agent` is
+ *  always `null`. */
 export type CustomWorkflowColumn = {
   name: string
   bot: boolean
+  agent: string | null
 }
 
 export type NewWorkflowDetails = {
@@ -84,26 +87,27 @@ export const updateWorkflow = (path: string, edits: WorkflowEdits) =>
 export const workflowFilePath = (workflowPath: string) => `${workflowPath}/workflow.json`
 
 /** One column as the board sees it — `bot` is the one field that decides
- *  bot-vs-human styling, for Backlog/Done and any ordinary column alike. */
+ *  bot-vs-human styling, for Backlog/Done and any ordinary column alike;
+ *  `agent` names which agent runs it, non-null exactly when `bot` is. */
 export type WorkflowColumn = {
   name: string
   bot: boolean
+  agent: string | null
 }
 
 /** A card references its column by name, not id — the same no-id convention
  *  columns themselves already follow. Renaming the column out from under it
- *  is an accepted gap; see CLAUDE.md. `assigned` is purely cosmetic — an
- *  agent name (for now) shown as the card's avatar seed; `null`/absent shows
- *  no avatar at all. `status` is likewise cosmetic — it only drives the
- *  card's outline; `null`/absent/any other value shows no outline.
- *  `last_activity` is a free-text description of the card's most recent
- *  event (e.g. a column move); `null`/absent means none yet. */
+ *  is an accepted gap; see CLAUDE.md. A card's avatar comes from its
+ *  column's `agent`, not anything stored on the card itself. `status` is
+ *  cosmetic — it only drives the card's outline; `null`/absent/any other
+ *  value shows no outline. `last_activity` is a free-text description of
+ *  the card's most recent event (e.g. a column move); `null`/absent means
+ *  none yet. */
 export type WorkflowCard = {
   id: string
   title: string
   description: string
   column: string
-  assigned: string | null
   status: 'in_session' | 'blocked' | null
   last_activity: string | null
 }

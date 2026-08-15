@@ -7,6 +7,9 @@ import { ArchiveIcon, TrashIcon } from './icons'
 
 type Props = {
   card: WorkflowCard
+  /** The bot column's agent name, or `null` for a human column — the
+   *  avatar's only input; there is no per-card assignee. */
+  agentName: string | null
   isBacklog: boolean
   isDone: boolean
   canMoveUp: boolean
@@ -23,13 +26,14 @@ type Props = {
 }
 
 /**
- * One card's face: title, an avatar slot filled only when the card itself has
- * someone assigned, and a hover-revealed actions row. Delete only shows in
+ * One card's face: title, an avatar slot filled only when its column is a
+ * bot column, and a hover-revealed actions row. Delete only shows in
  * Backlog, archive only in Done, and the joystick everywhere except Done —
  * all three hardcoded by the column's position, not its name.
  */
 export function Card({
   card,
+  agentName,
   isBacklog,
   isDone,
   canMoveUp,
@@ -43,7 +47,7 @@ export function Card({
   onMoveRight,
 }: Props) {
   const { pending, error, run } = useAsyncAction()
-  const { assigned, status } = card
+  const { status } = card
 
   return (
     <li
@@ -53,8 +57,10 @@ export function Card({
         status === 'blocked' && 'card--status-blocked',
       ])}
     >
-      <div className={classes(['card__avatar', assigned && 'card__avatar--bot'])}>
-        {assigned && <img className="card__avatar-icon" src={agentAvatar(assigned)} alt="" title={assigned} />}
+      <div className={classes(['card__avatar', agentName && 'card__avatar--bot'])}>
+        {agentName && (
+          <img className="card__avatar-icon" src={agentAvatar(agentName)} alt={agentName} title={agentName} />
+        )}
       </div>
 
       <button type="button" className="card__title" onClick={onOpen}>

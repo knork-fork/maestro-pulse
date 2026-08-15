@@ -608,13 +608,28 @@ function validColumns(input) {
 
 /**
  * A column's bot/human-ness is stored as its own explicit `bot` key — see
- * `isBotColumn`.
+ * `isBotColumn`. A bot column must also name the agent that runs it; a human
+ * column never carries one, even if the client sent one anyway.
  */
 function validColumn(entry) {
   const name = requiredText(entry?.name, 'column name')
   if (name.length > MAX_COLUMN_NAME_LENGTH) throw new HttpError(400, 'That column name is too long')
 
-  return { name, bot: entry?.bot === true }
+  const bot = entry?.bot === true
+  const agent = validAgentRef(entry?.agent)
+  if (bot && agent === null) throw new HttpError(400, `Column "${name}" needs an agent`)
+
+  return { name, bot, agent: bot ? agent : null }
+}
+
+/** An agent reference: absent or explicit `null` both mean "none". */
+function validAgentRef(input) {
+  const value = input ?? null
+  if (value !== null && typeof value !== 'string') {
+    throw new HttpError(400, '"agent" must be a string or null')
+  }
+
+  return value
 }
 
 function validCardAction(input) {

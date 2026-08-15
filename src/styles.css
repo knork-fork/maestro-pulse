@@ -1074,6 +1074,8 @@ body {
   color: var(--text-dim);
 }
 
+.column-card__agent { flex: none; width: 140px; }
+
 .column-card__remove {
   flex: none;
   width: 22px;

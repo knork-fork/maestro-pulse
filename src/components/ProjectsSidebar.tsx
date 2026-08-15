@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ROOT_PATH } from '../data/api'
 import type { CreatableType, TreeNode } from '../data/tree'
-import { expandablePaths, filterTree } from '../data/tree'
+import { expandablePaths, filterTree, locate } from '../data/tree'
 import type { ProjectTreeState } from '../hooks/useProjectTree'
 import { AgentDialog } from './AgentDialog'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -10,6 +10,7 @@ import { NewProjectDialog } from './NewProjectDialog'
 import { ProjectTree } from './ProjectTree'
 import type { Draft } from './ProjectTree'
 import { RenameDialog } from './RenameDialog'
+import type { AvailableAgent } from './WorkflowDialog'
 import { WorkflowDialog } from './WorkflowDialog'
 import { RefreshIcon } from './icons'
 
@@ -98,6 +99,21 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
     // Leaving the field commits, so another "+" may have started a second draft
     // while this one was saving — that one is not ours to close.
     setDraft((current) => (current === committed ? null : current))
+  }
+
+  /**
+   * The agents a workflow's bot columns may be assigned to, scoped to the
+   * project that owns `workflowsFolderPath` (its `agents` sibling folder) —
+   * not every agent in the whole tree.
+   */
+  const agentsFor = (workflowsFolderPath: string): AvailableAgent[] => {
+    const projectPath = workflowsFolderPath.split('/').slice(0, -1).join('/')
+    const found = locate(tree.nodes, `${projectPath}/agents`)
+    if (!found || found.node.type === 'file') return []
+
+    return found.node.children
+      .filter((child): child is Extract<TreeNode, { type: 'agent' }> => child.type === 'agent')
+      .map((agent) => ({ name: agent.name, path: agent.path }))
   }
 
   return (
@@ -203,6 +219,7 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
       {creatingWorkflowIn !== null && (
         <WorkflowDialog
           mode="create"
+          availableAgents={agentsFor(creatingWorkflowIn)}
           onCreate={async (details) => {
             await tree.createWorkflow(creatingWorkflowIn, details)
             setCreatingWorkflowIn(null)
@@ -215,6 +232,7 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
         <WorkflowDialog
           mode="edit"
           node={editingWorkflow}
+          availableAgents={agentsFor(editingWorkflow.path.split('/').slice(0, -1).join('/'))}
           onSave={async (edits) => {
             await tree.updateWorkflow(editingWorkflow.path, edits)
             setEditingWorkflow(null)

@@ -38,6 +38,9 @@ export function Column({
   onMoveRight,
 }: Props) {
   const isBot = column.bot
+  // An agent's display name is its directory name, which is also the last
+  // segment of its path — no separate lookup needed for the card avatar.
+  const agentName = column.agent ? column.agent.split('/').pop() || column.agent : null
 
   return (
     <div className={classes(['column', isBot ? 'column--bot' : 'column--human'])}>
@@ -55,6 +58,7 @@ export function Column({
           <Card
             key={card.id}
             card={card}
+            agentName={agentName}
             isBacklog={isFirst}
             isDone={isLast}
             canMoveUp={index > 0}

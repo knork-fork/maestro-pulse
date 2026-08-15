@@ -138,9 +138,13 @@ function parseWorkflowBoard(content: string): WorkflowBoard | null {
 
     const columns: WorkflowColumn[] = []
     for (const entry of parsed.columns) {
-      const column = entry as { name?: unknown; bot?: unknown }
+      const column = entry as { name?: unknown; bot?: unknown; agent?: unknown }
       if (typeof column.name !== 'string') return null
-      columns.push({ name: column.name, bot: column.bot === true })
+      columns.push({
+        name: column.name,
+        bot: column.bot === true,
+        agent: typeof column.agent === 'string' ? column.agent : null,
+      })
     }
 
     return {
@@ -162,7 +166,6 @@ const parseCards = (value: unknown): WorkflowCard[] =>
           title?: unknown
           description?: unknown
           column?: unknown
-          assigned?: unknown
           status?: unknown
           last_activity?: unknown
         }
@@ -173,7 +176,6 @@ const parseCards = (value: unknown): WorkflowCard[] =>
                 title: card.title,
                 description: typeof card.description === 'string' ? card.description : '',
                 column: card.column,
-                assigned: typeof card.assigned === 'string' ? card.assigned : null,
                 status: card.status === 'in_session' || card.status === 'blocked' ? card.status : null,
                 last_activity: typeof card.last_activity === 'string' ? card.last_activity : null,
               },
