@@ -1286,11 +1286,22 @@ body {
 .modal__panel--wide { max-width: 440px; }
 
 /* Wide enough for the agent-view__basics two-column layout the agent
-   create/edit form reuses. */
-.modal__panel--agent { max-width: 620px; }
+   create/edit form reuses. Its four sliders plus fields can run taller than
+   the viewport, so this one scrolls internally rather than pushing past it. */
+.modal__panel--agent {
+  max-width: 620px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
 
-/* Wide enough for a comfortable multi-line instructions editor. */
-.modal__panel--instructions { max-width: 760px; }
+/* Wide enough for a comfortable multi-line instructions editor. Same
+   overflow treatment as --workflow/--agent: scrolls internally rather than
+   pushing past the viewport. */
+.modal__panel--instructions {
+  max-width: 760px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
 
 /* Wide enough for the columns editor's 3-column grid per row. Columns plus
    the instructions editor can run taller than the viewport, so this one
