@@ -76,6 +76,31 @@ const DEFAULT_AGENT_INSTRUCTIONS =
   'role, responsibilities, tone, and any constraints it should follow.\n'
 
 /**
+ * A workflow's own instructions, as raw markdown — a second file alongside
+ * WORKFLOW_FILE, scaffolded once on creation and edited independently of it
+ * thereafter (see `updateWorkflowInstructions`), so a `workflow.json` edit
+ * (description/columns) never touches it. Also handed to an external agent
+ * via the add-to-backlog skill (see `getAddToBacklogSkill`).
+ *
+ * Deliberately scoped to what's specific to *this* workflow — what "good
+ * work" means for it and what artifacts/evidence should exist by the time
+ * it's done — not generic card-movement mechanics (who may pick up a card,
+ * a one-stage handoff, human override, blocked status), which are the same
+ * for every workflow and already enforced by `applyCardAction`/`validColumn`
+ * below; see [src/data/workflowTemplates.ts](../src/data/workflowTemplates.ts)
+ * for the same split applied to the starter templates.
+ */
+const WORKFLOW_INSTRUCTIONS_FILE = 'workflow.md'
+const DEFAULT_WORKFLOW_INSTRUCTIONS =
+  '# Instructions\n\n' +
+  'Describe what "good work" means for this workflow: what artifacts or ' +
+  'evidence should exist on a card by the time it\'s done (e.g. a handoff ' +
+  'document, exploration notes, a screenshot or short recording), and any ' +
+  'workflow-specific conditions or exceptions for a card to move forward. ' +
+  'Generic rules — who may pick up a card, handoffs, manual overrides — are ' +
+  'already handled by Pulse itself and don\'t need to be repeated here.\n'
+
+/**
  * An agent's numeric settings' bounds and defaults. Mirrors
  * src/data/agent.ts exactly — the client's sliders can't produce an
  * out-of-range value, but a hand-crafted request could, so both sides need
@@ -134,6 +159,7 @@ const routes = {
   'PATCH /api/workflow-cards': updateWorkflowCard,
   'POST /api/workflow-cards': createWorkflowCard,
   'PUT /api/agent-instructions': updateAgentInstructions,
+  'PUT /api/workflow-instructions': updateWorkflowInstructions,
   'GET /skills/add-to-backlog': getAddToBacklogSkill,
 }
 
@@ -215,8 +241,10 @@ async function createEntry(req) {
   if (details) {
     try {
       if (type === 'project') await scaffoldProject(abs, details)
-      else if (type === 'workflow') await scaffoldWorkflow(abs, details)
-      else {
+      else if (type === 'workflow') {
+        await scaffoldWorkflow(abs, details)
+        await writeFile(path.join(abs, WORKFLOW_INSTRUCTIONS_FILE), DEFAULT_WORKFLOW_INSTRUCTIONS)
+      } else {
         await scaffoldAgent(abs, details)
         await writeFile(path.join(abs, AGENT_INSTRUCTIONS_FILE), DEFAULT_AGENT_INSTRUCTIONS)
       }
@@ -285,6 +313,30 @@ async function updateAgentInstructions(req) {
   await guardFs(
     () => writeFile(path.join(abs, AGENT_INSTRUCTIONS_FILE), instructions ? `${instructions}\n` : ''),
     `No such agent: ${target}`,
+  )
+
+  return { status: 200, body: { path: target } }
+}
+
+/**
+ * Overwrites an existing workflow's `workflow.md` — its own narrow route,
+ * separate from `updateEntry`, so editing `workflow.json`
+ * (description/columns) can never clobber this file and vice versa.
+ */
+async function updateWorkflowInstructions(req) {
+  const body = await readJson(req)
+  const target = relativePath(body.path)
+  const abs = path.join(ROOT, target)
+
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
+    throw new HttpError(404, `No such workflow: ${target}`)
+  }
+
+  const instructions = validInstructions(body.instructions)
+
+  await guardFs(
+    () => writeFile(path.join(abs, WORKFLOW_INSTRUCTIONS_FILE), instructions ? `${instructions}\n` : ''),
+    `No such workflow: ${target}`,
   )
 
   return { status: 200, body: { path: target } }
@@ -390,12 +442,19 @@ async function getAddToBacklogSkill(req, url) {
     throw new HttpError(500, 'project.json is not valid JSON')
   }
 
+  const rawInstructions = await readFile(path.join(abs, WORKFLOW_INSTRUCTIONS_FILE), 'utf8').catch(() => '')
+  const trimmedInstructions = rawInstructions.trim()
+  const workflowInstructions = trimmedInstructions
+    ? `## This workflow's instructions\n\n${trimmedInstructions}\n`
+    : ''
+
   const template = await readFile(ADD_TO_BACKLOG_TEMPLATE, 'utf8')
   const filled = template
     .replaceAll('{{PROJECT_NAME}}', project)
     .replaceAll('{{DIR_ON_HOST}}', String(dirOnHost))
     .replaceAll('{{HOST_URL}}', host)
     .replaceAll('{{WORKFLOW_PATH}}', target)
+    .replaceAll('{{WORKFLOW_INSTRUCTIONS}}', workflowInstructions)
 
   return { status: 200, body: filled, raw: true }
 }
@@ -858,9 +917,10 @@ function optionalText(input, field) {
 }
 
 /**
- * An agent's `agent.md` body — far longer than any other free text field
- * (`MAX_TEXT_LENGTH`), since it is a system prompt rather than a label, and
- * empty is valid: nothing forces an agent to keep non-blank instructions.
+ * An agent's `agent.md` or a workflow's `workflow.md` body — far longer than
+ * any other free text field (`MAX_TEXT_LENGTH`), since it is prose rather
+ * than a label, and empty is valid: nothing forces either to keep non-blank
+ * instructions.
  */
 function validInstructions(input) {
   const value = typeof input === 'string' ? input.trim() : ''

@@ -1,10 +1,13 @@
 import { useId, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import type { CustomWorkflowColumn, NewWorkflowDetails, WorkflowEdits } from '../data/api'
-import { workflowFilePath } from '../data/api'
+import { workflowFilePath, workflowInstructionsPath } from '../data/api'
 import type { TreeNode } from '../data/tree'
+import { WORKFLOW_TEMPLATES } from '../data/workflowTemplates'
 import { useAsyncAction } from '../hooks/useAsyncAction'
 import { useFileContent } from '../hooks/useFileContent'
+import { Menu, anchorFromRect } from './Menu'
+import type { MenuAnchor } from './Menu'
 import { Modal } from './Modal'
 
 /** Shown as plain UI copy for the pinned rows — the server adds the same
@@ -29,14 +32,14 @@ type Props =
   | {
       mode: 'create'
       availableAgents: AvailableAgent[]
-      onCreate: (details: NewWorkflowDetails) => Promise<void>
+      onCreate: (details: NewWorkflowDetails & { instructions: string }) => Promise<void>
       onCancel: () => void
     }
   | {
       mode: 'edit'
       node: TreeNode
       availableAgents: AvailableAgent[]
-      onSave: (edits: WorkflowEdits) => Promise<void>
+      onSave: (edits: WorkflowEdits & { instructions: string }) => Promise<void>
       onCancel: () => void
     }
 
@@ -66,6 +69,7 @@ export function WorkflowDialog(props: Props) {
       initialColumns={defaultColumns()}
       initialBacklogDescription={DEFAULT_BACKLOG_DESCRIPTION}
       initialDoneDescription={DEFAULT_DONE_DESCRIPTION}
+      initialInstructions=""
       availableAgents={props.availableAgents}
       onCancel={props.onCancel}
       onSubmit={(values) => props.onCreate(values)}
@@ -111,13 +115,19 @@ function EditWorkflowDialog({
 }: {
   node: TreeNode
   availableAgents: AvailableAgent[]
-  onSave: (edits: WorkflowEdits) => Promise<void>
+  onSave: (edits: WorkflowEdits & { instructions: string }) => Promise<void>
   onCancel: () => void
 }) {
   const { content, error, loading } = useFileContent(workflowFilePath(node.path))
+  // A workflow created before `workflow.md` existed has none yet — that's
+  // treated as empty rather than blocking the dialog, the same way a broken
+  // `workflow.json` does.
+  const { content: instructionsContent, loading: instructionsLoading } = useFileContent(
+    workflowInstructionsPath(node.path),
+  )
   const title = `Edit ${node.name}`
 
-  if (loading) {
+  if (loading || instructionsLoading) {
     return (
       <Modal title={title} wide onCancel={onCancel}>
         <p className="empty-state">Loading…</p>
@@ -145,6 +155,11 @@ function EditWorkflowDialog({
     )
   }
 
+  // Any instructions-load failure (missing file or otherwise) falls back to
+  // an empty editor rather than blocking the dialog — only a broken
+  // `workflow.json` does that, checked above.
+  const initialInstructions = instructionsContent ?? ''
+
   return (
     <WorkflowForm
       title={title}
@@ -154,6 +169,7 @@ function EditWorkflowDialog({
       initialColumns={parsed.columns}
       initialBacklogDescription={parsed.backlogDescription}
       initialDoneDescription={parsed.doneDescription}
+      initialInstructions={initialInstructions}
       availableAgents={availableAgents}
       onCancel={onCancel}
       onSubmit={(values) =>
@@ -162,6 +178,7 @@ function EditWorkflowDialog({
           columns: values.columns,
           backlogDescription: values.backlogDescription,
           doneDescription: values.doneDescription,
+          instructions: values.instructions,
         })
       }
     />
@@ -217,6 +234,7 @@ type FormProps = {
   initialColumns: DraftColumn[]
   initialBacklogDescription: string
   initialDoneDescription: string
+  initialInstructions: string
   availableAgents: AvailableAgent[]
   onCancel: () => void
   onSubmit: (values: {
@@ -225,6 +243,7 @@ type FormProps = {
     columns: CustomWorkflowColumn[]
     backlogDescription: string
     doneDescription: string
+    instructions: string
   }) => Promise<void>
 }
 
@@ -236,6 +255,7 @@ function WorkflowForm({
   initialColumns,
   initialBacklogDescription,
   initialDoneDescription,
+  initialInstructions,
   availableAgents,
   onCancel,
   onSubmit,
@@ -245,12 +265,22 @@ function WorkflowForm({
   const [columns, setColumns] = useState<DraftColumn[]>(initialColumns)
   const [backlogDescription, setBacklogDescription] = useState(initialBacklogDescription)
   const [doneDescription, setDoneDescription] = useState(initialDoneDescription)
+  const [instructions, setInstructions] = useState(initialInstructions)
+  const [templatesAnchor, setTemplatesAnchor] = useState<MenuAnchor | null>(null)
+  const templatesRef = useRef<HTMLButtonElement>(null)
   const { pending, error, run } = useAsyncAction()
   const fieldId = useId()
   /** Which card is mid-drag — a ref, since it drives no render of its own. */
   const draggingKey = useRef<string | null>(null)
   /** Name inputs, keyed by card, so Enter can focus the one just added. */
   const nameInputs = useRef(new Map<string, HTMLInputElement>())
+
+  const toggleTemplates = () =>
+    setTemplatesAnchor((prev) => {
+      if (prev) return null
+      const rect = templatesRef.current?.getBoundingClientRect()
+      return rect ? anchorFromRect(rect) : null
+    })
 
   const trimmedName = name.trim()
   const trimmedDescription = description.trim()
@@ -263,6 +293,7 @@ function WorkflowForm({
     columns.every((column) => column.name.trim().length > 0 && column.description.trim().length > 0) &&
     backlogDescription.trim().length > 0 &&
     doneDescription.trim().length > 0 &&
+    instructions.trim().length > 0 &&
     !missingAgent
 
   const updateColumn = (key: string, patch: Partial<DraftColumn>) =>
@@ -314,6 +345,7 @@ function WorkflowForm({
         })),
         backlogDescription: backlogDescription.trim(),
         doneDescription: doneDescription.trim(),
+        instructions: instructions.trim(),
       }),
     )
   }
@@ -487,6 +519,53 @@ function WorkflowForm({
           {missingAgent && availableAgents.length === 0 && (
             <p className="modal__error">Create an agent for this project first, then choose it here.</p>
           )}
+        </div>
+
+        <div className="modal__field">
+          <span className="modal__label">Instructions</span>
+          <p className="modal__message">
+            What makes this workflow different: what "good work" means here,
+            and what should exist on a card (a handoff document, exploration
+            notes, a screenshot or short video…) by the time it's done.
+          </p>
+          <p className="modal__message">
+            Tip: generic rules — who may pick up a card, handoffs, manual
+            overrides — don't belong here; Pulse already handles those the
+            same way for every workflow.
+          </p>
+
+          <textarea
+            className="modal__input modal__input--multiline modal__input--code"
+            rows={10}
+            value={instructions}
+            placeholder="What does 'good work' mean for this workflow? What should a card carry (a handoff document, exploration notes, a screenshot…) by the time it's done?"
+            disabled={pending}
+            onChange={(event) => setInstructions(event.target.value)}
+          />
+
+          <div className="agent-instructions__toolbar">
+            <button
+              ref={templatesRef}
+              type="button"
+              className="btn"
+              disabled={pending}
+              onClick={toggleTemplates}
+            >
+              Templates
+            </button>
+
+            {templatesAnchor && (
+              <Menu
+                anchor={templatesAnchor}
+                ignore={templatesRef}
+                items={WORKFLOW_TEMPLATES.map((template) => ({
+                  label: template.label,
+                  onSelect: () => setInstructions(template.content),
+                }))}
+                onDismiss={() => setTemplatesAnchor(null)}
+              />
+            )}
+          </div>
         </div>
 
         {error && <p className="modal__error">{error}</p>}

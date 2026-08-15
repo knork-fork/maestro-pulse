@@ -57,7 +57,8 @@ dependency-free Node API that owns the folder tree.
 | Menu positioning, portalling and dismissal (shared by both) | [src/components/Menu.tsx](src/components/Menu.tsx) |
 | Dialog shell | [src/components/Modal.tsx](src/components/Modal.tsx) |
 | What a new project is asked for | [src/components/NewProjectDialog.tsx](src/components/NewProjectDialog.tsx) |
-| What a workflow is created/edited with, columns included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
+| What a workflow is created/edited with, columns and its own `workflow.md` instructions (with template picker) included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
+| The workflow instruction templates (Development, QA, Potentials & Leads/Sales, R&D, Management, Review/Audit) the dialog's template picker offers | [src/data/workflowTemplates.ts](src/data/workflowTemplates.ts) |
 | What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
 | What an agent's own view renders — real profile fields, its rendered `agent.md` instructions, the placeholder toolkit and empty stats sections, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
 | An agent's data shape, numeric bounds/defaults, and the shared `agent.json` parser | [src/data/agent.ts](src/data/agent.ts) |
@@ -315,6 +316,32 @@ the tree) would otherwise leave an already-open board stale until its next
 `nodes` down to `KanbanBoard` as `treeVersion` so it can quiet-reload the
 instant the tree does.
 
+A workflow additionally gets `workflow.md` alongside `workflow.json` — its own
+free-text instructions, the same split an agent's `agent.md`/`agent.json`
+pair already has. Scoped deliberately narrow: what "good work" means for
+*this* workflow, and what artifacts/evidence a card should carry by the time
+it's done (a handoff document, exploration notes, a screenshot…) — not
+generic card-movement mechanics (who may pick up a card, a one-stage
+handoff, human override, blocked status), which are the same for every
+workflow and already enforced by `applyCardAction`/`validColumn`, so a
+template repeating them would just drift out of sync with the engine; see
+the doc comment on `WORKFLOW_TEMPLATES` in
+[workflowTemplates.ts](src/data/workflowTemplates.ts) for the same split.
+Scaffolded with a placeholder (`DEFAULT_WORKFLOW_INSTRUCTIONS`) only on
+creation, and edited through its own route, `PUT /api/workflow-instructions`
+(`updateWorkflowInstructions`), entirely separate from `updateEntry` so
+neither file's edits touch the other. Unlike `agent.md` — which has a
+dedicated modal reachable from two places since an agent has a full-page view
+— a workflow has no such view, so its instructions are edited inline in
+[WorkflowDialog.tsx](src/components/WorkflowDialog.tsx), below the columns
+form, with the same "Templates" picker mechanic (see
+[workflowTemplates.ts](src/data/workflowTemplates.ts)); the dialog's single
+Save button issues two writes in sequence (`updateWorkflow` then
+`updateWorkflowInstructions`), reported as a distinct error if the second
+fails since the first has already landed. Reading it doesn't gate the edit
+dialog the way a broken `workflow.json` does — a workflow created before this
+file existed just opens with an empty instructions field.
+
 A workflow's `workflow.json` additionally holds `cards` and `archived`, each a
 flat array of `{ id, title, description, column, status, last_activity, issues }`,
 where `column` names a
@@ -354,8 +381,9 @@ the server reads it off the proxied request's own `Host` header instead (see
 nginx's `proxy_set_header Host $host`). The route
 returns [add-to-backlog-template.md](server/add-to-backlog-template.md) with
 its placeholders swapped for that project's real name, its `dir_on_host`
-(from `project.json`), and that host — as raw markdown, not JSON, the one
-route in this API that isn't.
+(from `project.json`), that host, and the workflow's own `workflow.md`
+content (empty/missing renders as nothing, so the template reads cleanly
+either way) — as raw markdown, not JSON, the one route in this API that isn't.
 
 An `agent` is marked and created the same way, one level down inside a
 project's `agents` folder instead — see `scaffoldAgent` in

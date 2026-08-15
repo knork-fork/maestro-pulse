@@ -126,11 +126,12 @@ export function useProjectTree() {
 
   const createWorkflow = useCallback(
     async (parentPath: string, details: NewWorkflowDetails) => {
-      await api.createWorkflow(parentPath, details)
+      const path = await api.createWorkflow(parentPath, details)
       // Named in a dialog rather than in the tree, so the parent may still be
       // shut — open it, or the workflow the user just made is nowhere to be seen.
       reveal(parentPath)
       await load()
+      return path
     },
     [load, reveal],
   )
@@ -140,6 +141,16 @@ export function useProjectTree() {
       await api.updateWorkflow(path, edits)
       // Unlike rename, a workflow's path never changes here — its name is
       // fixed after creation, so expansion/selection need no bookkeeping.
+      await load()
+    },
+    [load],
+  )
+
+  const updateWorkflowInstructions = useCallback(
+    async (path: string, instructions: string) => {
+      await api.updateWorkflowInstructions(path, instructions)
+      // Bumps `nodes` the same way `updateWorkflow` does, so an already-open
+      // board quiet-reloads via its own `treeVersion` effect.
       await load()
     },
     [load],
@@ -213,6 +224,7 @@ export function useProjectTree() {
     createProject,
     createWorkflow,
     updateWorkflow,
+    updateWorkflowInstructions,
     createAgent,
     updateAgent,
     updateAgentInstructions,

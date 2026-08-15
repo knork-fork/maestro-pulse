@@ -1292,8 +1292,14 @@ body {
 /* Wide enough for a comfortable multi-line instructions editor. */
 .modal__panel--instructions { max-width: 760px; }
 
-/* Wide enough for the columns editor's 3-column grid per row. */
-.modal__panel--workflow { max-width: 860px; }
+/* Wide enough for the columns editor's 3-column grid per row. Columns plus
+   the instructions editor can run taller than the viewport, so this one
+   scrolls internally rather than pushing past it. */
+.modal__panel--workflow {
+  max-width: 860px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
 
 .modal__title {
   margin: 0 0 12px;

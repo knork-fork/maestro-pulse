@@ -223,8 +223,20 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
         <WorkflowDialog
           mode="create"
           availableAgents={agentsFor(creatingWorkflowIn)}
-          onCreate={async (details) => {
-            await tree.createWorkflow(creatingWorkflowIn, details)
+          onCreate={async ({ instructions, ...details }) => {
+            const path = await tree.createWorkflow(creatingWorkflowIn, details)
+            // Left blank, the server's scaffolded default instructions stand
+            // untouched. The workflow itself is already created at this
+            // point, so a failure here is reported distinctly rather than
+            // implying the whole thing failed.
+            if (instructions.trim()) {
+              try {
+                await tree.updateWorkflowInstructions(path, instructions)
+              } catch (cause) {
+                const message = cause instanceof Error ? cause.message : String(cause)
+                throw new Error(`Workflow created, but saving instructions failed: ${message}`)
+              }
+            }
             setCreatingWorkflowIn(null)
           }}
           onCancel={() => setCreatingWorkflowIn(null)}
@@ -236,8 +248,14 @@ export function ProjectsSidebar({ tree }: { tree: ProjectTreeState }) {
           mode="edit"
           node={editingWorkflow}
           availableAgents={agentsFor(editingWorkflow.path.split('/').slice(0, -1).join('/'))}
-          onSave={async (edits) => {
+          onSave={async ({ instructions, ...edits }) => {
             await tree.updateWorkflow(editingWorkflow.path, edits)
+            try {
+              await tree.updateWorkflowInstructions(editingWorkflow.path, instructions)
+            } catch (cause) {
+              const message = cause instanceof Error ? cause.message : String(cause)
+              throw new Error(`Workflow saved, but saving instructions failed: ${message}`)
+            }
             setEditingWorkflow(null)
           }}
           onCancel={() => setEditingWorkflow(null)}

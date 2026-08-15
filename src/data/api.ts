@@ -113,6 +113,14 @@ export const updateWorkflow = (path: string, edits: WorkflowEdits) =>
  *  prefilling the edit dialog, or loading its board. */
 export const workflowFilePath = (workflowPath: string) => `${workflowPath}/workflow.json`
 
+/** Where a workflow's own instructions live — a separate file from
+ *  `workflow.json`, written independently of it. */
+export const workflowInstructionsPath = (workflowPath: string) => `${workflowPath}/workflow.md`
+
+/** Overwrites an existing workflow's `workflow.md`. Never touches `workflow.json`. */
+export const updateWorkflowInstructions = (path: string, instructions: string) =>
+  request<{ path: string }>('PUT', '/workflow-instructions', { path, instructions }).then(() => undefined)
+
 /** One column as the board sees it — `bot` is the one field that decides
  *  bot-vs-human styling, for Backlog/Done and any ordinary column alike;
  *  `agent` names which agent runs it, non-null exactly when `bot` is. */

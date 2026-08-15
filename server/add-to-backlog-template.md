@@ -18,8 +18,7 @@ done. Do not create the ticket immediately from that alone:
    anything. Only proceed once you have enough to write a clear, actionable
    ticket.
 
-<!-- TODO: guidance on what a card's description should explain and detail —
-     coming later. -->
+{{WORKFLOW_INSTRUCTIONS}}
 
 Once you have a title and a description you're confident in, create the card
 by sending:
