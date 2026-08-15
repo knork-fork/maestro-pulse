@@ -58,7 +58,10 @@ dependency-free Node API that owns the folder tree.
 | What a new project is asked for | [src/components/NewProjectDialog.tsx](src/components/NewProjectDialog.tsx) |
 | What a workflow is created/edited with, columns included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
 | What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
-| What an agent's own view renders — profile, dummy heartbeat/max-children/mission, sample pulse actions, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
+| What an agent's own view renders — real profile fields, sample pulse actions, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
+| An agent's data shape, numeric bounds/defaults, and the shared `agent.json` parser | [src/data/agent.ts](src/data/agent.ts) |
+| The slider/label controls shared by an agent's view and its dialog | [src/components/AgentFields.tsx](src/components/AgentFields.tsx) |
+| An agent view's own data — fetch, quiet reload driven by the tree, and the debounced per-slider save | [src/hooks/useAgentProfile.ts](src/hooks/useAgentProfile.ts) |
 | A workflow's kanban board — columns, bot/human column styling, per-card move/delete/archive controls, the read-only card detail modal, and the Backlog-only "add a ticket" button | [src/components/KanbanBoard.tsx](src/components/KanbanBoard.tsx), [src/components/Column.tsx](src/components/Column.tsx), [src/components/Card.tsx](src/components/Card.tsx), [src/components/CardMoveMenu.tsx](src/components/CardMoveMenu.tsx), [src/components/CardDetailModal.tsx](src/components/CardDetailModal.tsx) |
 | The instructional modal a Backlog "+" click opens — builds the add-to-backlog skill URL for an external agent to fetch, never calls the API itself | [src/components/AddToBacklogModal.tsx](src/components/AddToBacklogModal.tsx) |
 | A workflow board's own data — fetch, quiet 60s poll, an immediate quiet reload whenever the tree reloads, and the per-card move/delete/archive mutations (moves guarded against a stale column) | [src/hooks/useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) |
@@ -175,7 +178,11 @@ Only files a view claims can be opened at all — every other file row is inert.
 relative images and links inside a rendered file cannot resolve and are shown as
 unresolved rather than followed. Nothing re-reads a file that changes on disk
 under an open view, except a workflow's board, which polls (see
-[useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts)). A project's details cannot be edited after the fact, and
+[useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts)), and an agent's own
+view, which quiet-reloads whenever the tree does (see
+[useAgentProfile.ts](src/hooks/useAgentProfile.ts)) and additionally saves a
+slider's own drag straight back to `agent.json`, debounced. A project's
+details cannot be edited after the fact, and
 renaming one does not revisit what was written into it. A workflow's own
 description/columns *are* editable after creation (unlike a project) — only
 its name is fixed; the same is true of an agent's description. Opening a
@@ -189,13 +196,21 @@ way for the browser itself to create a card. Any editable column (Ready, Doing, 
 renamed via [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) after it
 has cards orphans them rather than migrating them, the same class of gap as a
 renamed project not revisiting what was written into it.
-Opening an agent's view shows a full profile card — its real `description`
-from `agent.json` alongside a heartbeat interval, a max-children limit, a
-mission statement, and a sample list of per-pulse actions — but only the name
-and description are real; the rest, plus the "Not running" status and the
-Spawn/Logs/Open session controls, are UI-only sample values with no session
-model, no persistence, and no server support behind them; see
-[AgentView.tsx](src/components/AgentView.tsx).
+Opening an agent's view shows a full profile card — name, title, description,
+mission, and the four numeric settings (heartbeat, max children, handholding,
+verbosity) all come from `agent.json`, editable via
+[AgentDialog.tsx](src/components/AgentDialog.tsx); only the "Not running"
+status, the Spawn/Logs/Open session controls, and the Pulse Actions list are
+still UI-only sample values with no session model, no persistence, and no
+server support behind them; see [AgentView.tsx](src/components/AgentView.tsx).
+The numeric sliders stay interactive in the view itself, and dragging one
+there saves it too — both the view's sliders and the modal write to the same
+`agent.json`, through `useAgentProfile.ts`'s debounced `update` and
+`AgentDialog.tsx`'s `updateAgent` respectively. The shape, its bounds/
+defaults, and the shared parser live in
+[src/data/agent.ts](src/data/agent.ts); the slider/label controls both
+`AgentView.tsx` and `AgentDialog.tsx` render with are shared from
+[src/components/AgentFields.tsx](src/components/AgentFields.tsx).
 
 ## Data shape
 
@@ -308,8 +323,11 @@ An `agent` is marked and created the same way, one level down inside a
 project's `agents` folder instead — see `scaffoldAgent` in
 [server/index.mjs](server/index.mjs) and
 [AgentDialog.tsx](src/components/AgentDialog.tsx). It has nothing analogous to
-a workflow's columns, so its own content (`agent.json`) is just a description,
-editable the same narrow way through `updateEntry`; its name is likewise
+a workflow's columns, so its own content (`agent.json`) is just its
+`AgentData` shape — description, title, mission, and the four numeric
+settings, see [src/data/agent.ts](src/data/agent.ts) — editable the same
+narrow way through `updateEntry`, which validates it server-side against the
+same bounds `agent.ts` declares; its name is likewise
 fixed. Opening an agent's view is a synthetic selection mirroring a workflow's
 board — see `agentViewPath`/`parseAgentViewPath` in
 [tree.ts](src/data/tree.ts). A workflow's bot columns can be assigned one of

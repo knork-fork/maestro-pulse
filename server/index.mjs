@@ -63,6 +63,29 @@ const CARD_ACTIONS = ['move-up', 'move-down', 'move-right', 'delete', 'archive']
 const AGENT_FILE = 'agent.json'
 
 /**
+ * An agent's numeric settings' bounds and defaults. Mirrors
+ * src/data/agent.ts exactly — the client's sliders can't produce an
+ * out-of-range value, but a hand-crafted request could, so both sides need
+ * to agree on the same bounds.
+ */
+const HEARTBEAT_MIN = 5
+const HEARTBEAT_MAX = 120
+const HEARTBEAT_STEP = 5
+const MAX_CHILDREN_MIN = 1
+const MAX_CHILDREN_MAX = 16
+const MAX_CHILDREN_STEP = 1
+const HANDHOLDING_MIN = 0
+const HANDHOLDING_MAX = 100
+const HANDHOLDING_STEP = 25
+const VERBOSITY_MIN = 0
+const VERBOSITY_MAX = 100
+const VERBOSITY_STEP = 25
+const DEFAULT_HEARTBEAT = 15
+const DEFAULT_MAX_CHILDREN = 4
+const DEFAULT_HANDHOLDING = 50
+const DEFAULT_VERBOSITY = 50
+
+/**
  * The "add a backlog ticket" skill text handed to an external Claude Code
  * session by `GET /skills/add-to-backlog` — a static template with
  * placeholders filled in per-request. Lives next to this file so the
@@ -155,7 +178,7 @@ async function createEntry(req) {
             columns: validColumns(body.columns),
           }
         : type === 'agent'
-          ? { description: requiredText(body.description, 'description') }
+          ? validAgentDetails(body)
           : null
 
   await ensureRoot()
@@ -215,7 +238,7 @@ async function updateEntry(req) {
             description: requiredText(body.description, 'description'),
             columns: validColumns(body.columns),
           })
-        : scaffoldAgent(abs, { description: requiredText(body.description, 'description') }),
+        : scaffoldAgent(abs, validAgentDetails(body)),
     `No such ${type}: ${target}`,
   )
 
@@ -502,10 +525,10 @@ async function existingCardData(abs) {
  * Writes (or rewrites) an agent's `agent.json`. Used both to fill a freshly
  * made agent directory and, from `updateEntry`, to save edits to an existing
  * one — unlike a workflow, an agent has nothing that needs assembling
- * server-side, so this is just the description.
+ * server-side, so this is just what `validAgentDetails` already validated.
  */
-async function scaffoldAgent(abs, { description }) {
-  await writeFile(path.join(abs, AGENT_FILE), `${JSON.stringify({ description }, null, 2)}\n`)
+async function scaffoldAgent(abs, details) {
+  await writeFile(path.join(abs, AGENT_FILE), `${JSON.stringify(details, null, 2)}\n`)
 }
 
 // ---- workflow cards ----
@@ -733,6 +756,74 @@ function validAgentRef(input) {
   }
 
   return value
+}
+
+/**
+ * Validates and returns an agent's full `agent.json` shape, for both
+ * `createEntry` and `updateEntry`. `description` keeps the existing
+ * required-text rule; `title`/`mission` are optional free text; the numeric
+ * fields fall back to their defaults when absent, so a body from before
+ * these fields existed still validates.
+ */
+function validAgentDetails(body) {
+  return {
+    description: requiredText(body.description, 'description'),
+    title: optionalText(body.title, 'title'),
+    mission: optionalText(body.mission, 'mission'),
+    heartbeat: validRange(body.heartbeat, 'heartbeat', {
+      min: HEARTBEAT_MIN,
+      max: HEARTBEAT_MAX,
+      step: HEARTBEAT_STEP,
+      fallback: DEFAULT_HEARTBEAT,
+    }),
+    maxChildren: validRange(body.maxChildren, 'maxChildren', {
+      min: MAX_CHILDREN_MIN,
+      max: MAX_CHILDREN_MAX,
+      step: MAX_CHILDREN_STEP,
+      fallback: DEFAULT_MAX_CHILDREN,
+    }),
+    handholding: validRange(body.handholding, 'handholding', {
+      min: HANDHOLDING_MIN,
+      max: HANDHOLDING_MAX,
+      step: HANDHOLDING_STEP,
+      fallback: DEFAULT_HANDHOLDING,
+    }),
+    verbosity: validRange(body.verbosity, 'verbosity', {
+      min: VERBOSITY_MIN,
+      max: VERBOSITY_MAX,
+      step: VERBOSITY_STEP,
+      fallback: DEFAULT_VERBOSITY,
+    }),
+  }
+}
+
+/** Like `requiredText`, but empty is allowed rather than rejected. */
+function optionalText(input, field) {
+  const value = typeof input === 'string' ? input.trim() : ''
+  if (value.length > MAX_TEXT_LENGTH) throw new HttpError(400, `That ${field} is too long`)
+  if (value.includes('\0')) throw new HttpError(400, `Invalid ${field}`)
+
+  return value
+}
+
+/**
+ * A numeric setting within `[min, max]` and aligned to `step`, defaulting to
+ * `fallback` when absent — a slider can't produce an invalid value, but a
+ * hand-crafted request could, and an older body simply won't have sent one.
+ */
+function validRange(input, field, { min, max, step, fallback }) {
+  if (input === undefined) return fallback
+  if (typeof input !== 'number' || !Number.isFinite(input)) {
+    throw new HttpError(400, `"${field}" must be a number`)
+  }
+  if (input < min || input > max) {
+    throw new HttpError(400, `"${field}" must be between ${min} and ${max}`)
+  }
+  if ((input - min) % step !== 0) {
+    throw new HttpError(400, `"${field}" must be a multiple of ${step} starting from ${min}`)
+  }
+
+  return input
 }
 
 function validCardAction(input) {

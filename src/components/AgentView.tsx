@@ -1,15 +1,30 @@
-import { useState } from 'react'
-import { agentFilePath } from '../data/api'
-import { useFileContent } from '../hooks/useFileContent'
+import { useEffect, useRef } from 'react'
+import {
+  HANDHOLDING_DESCRIPTIONS,
+  HANDHOLDING_MAX,
+  HANDHOLDING_MIN,
+  HANDHOLDING_STEP,
+  HANDHOLDING_TOOLTIP,
+  HEARTBEAT_MAX,
+  HEARTBEAT_MIN,
+  HEARTBEAT_STEP,
+  HEARTBEAT_TOOLTIP,
+  MAX_CHILDREN_MAX,
+  MAX_CHILDREN_MIN,
+  MAX_CHILDREN_STEP,
+  MAX_CHILDREN_TOOLTIP,
+  VERBOSITY_DESCRIPTIONS,
+  VERBOSITY_MAX,
+  VERBOSITY_MIN,
+  VERBOSITY_STEP,
+  VERBOSITY_TOOLTIP,
+} from '../data/agent'
+import type { AgentData } from '../data/agent'
+import { useAgentProfile } from '../hooks/useAgentProfile'
+import { FieldLabel, RangeField } from './AgentFields'
 import { agentAvatar } from './avatar'
 
 const STATUS_LABEL = 'Not running'
-
-const MISSION =
-  "Keep an eye on the work assigned to it, pick up anything new that falls " +
-  'within its scope, and make steady progress between check-ins. When ' +
-  'something is ambiguous or looks risky, it should pause and flag it ' +
-  'rather than guess.'
 
 const PULSE_ACTIONS = [
   'Check the shared task queue for anything new or reassigned.',
@@ -19,49 +34,32 @@ const PULSE_ACTIONS = [
   'Flag anything that looks stuck or needs a human decision.',
 ]
 
-const DEFAULT_HEARTBEAT = 15
-const DEFAULT_MAX_CHILDREN = 4
-const DEFAULT_HANDHOLDING = 50
-const DEFAULT_VERBOSITY = 50
-
-const HANDHOLDING_DESCRIPTIONS: Record<number, string> = {
-  0: 'Agent decides everything itself.',
-  25: 'Escalate architecture/design decisions only.',
-  50: 'Escalate significant ambiguity and tradeoffs.',
-  75: 'Ask on most non-trivial decisions.',
-  100: 'Ask whenever there is meaningful ambiguity.',
-}
-
-const VERBOSITY_DESCRIPTIONS: Record<number, string> = {
-  0: 'Caveman',
-  25: 'Concise',
-  50: 'Normal',
-  75: 'Detailed',
-  100: 'Scholar',
-}
-
-const HEARTBEAT_TOOLTIP =
-  'How often the agent checks in for new work. Checking in less often uses fewer tokens overall.'
-
-const MAX_CHILDREN_TOOLTIP =
-  'How many subagents can run at once. A lower limit is cheaper overall, but slower for work that could otherwise run in parallel.'
-
-const HANDHOLDING_TOOLTIP =
-  'At high values, subagents will often stop and wait for human input before continuing. This combines poorly with a high Max children, since many subagents can end up blocked waiting on you at the same time. 50% is the baseline value.'
-
-const VERBOSITY_TOOLTIP =
-  'Lower verbosity is fine for internal, agent-to-agent use where no one is reading every message closely. 50% is the baseline value.'
-
-type Props = { path: string; name: string }
+/** `treeVersion` is the tree's own `nodes` array — a fresh reference every
+ *  time `useProjectTree` reloads, including right after this agent was
+ *  edited from the sidebar's dialog. This view has no other way to learn
+ *  that its own agent.json just changed underneath it, since it reads the
+ *  file directly through its own `useAgentProfile` rather than through the
+ *  tree — mirrors KanbanBoard.tsx's identical `treeVersion` convention. */
+type Props = { path: string; name: string; treeVersion: unknown }
 
 /**
- * An agent's own profile — real `name`/`description`, everything else (the
- * sliders, mission, pulse actions, status and top-bar controls) is sample UI
- * data with nothing behind it yet. See the "Not yet wired" note in
- * ../../CLAUDE.md.
+ * An agent's own profile — `name`, `title`, `description`, `mission`, and the
+ * four numeric settings all come from `agent.json` now, and dragging a
+ * slider here saves it (debounced) via `useAgentProfile`. Only the "Not
+ * running" status, Spawn/Logs/Open session controls, and the Pulse Actions
+ * list below remain sample UI data with nothing behind them yet. See the
+ * "Not yet wired" note in ../../CLAUDE.md.
  */
-export function AgentView({ path, name }: Props) {
-  const { content, error, loading } = useFileContent(agentFilePath(path))
+export function AgentView({ path, name, treeVersion }: Props) {
+  const { data, error, loading, reload, update } = useAgentProfile(path)
+  /** Skips the redundant reload on mount — `useAgentProfile` already loads
+   *  itself then; this effect only needs to fire on a *later* tree reload. */
+  const mounted = useRef(false)
+
+  useEffect(() => {
+    if (mounted.current) void reload(true)
+    else mounted.current = true
+  }, [treeVersion, reload])
 
   if (loading) {
     return (
@@ -71,8 +69,7 @@ export function AgentView({ path, name }: Props) {
     )
   }
 
-  const parsed = error ? null : parseAgentFile(content ?? '')
-  if (!parsed) {
+  if (!data) {
     return (
       <div className="viewer agent-view">
         <p className="viewer__error" role="alert">
@@ -91,34 +88,21 @@ export function AgentView({ path, name }: Props) {
         </button>
       </div>
 
-      <BasicInfoCard name={name} description={parsed.description} />
+      <BasicInfoCard name={name} data={data} onChange={update} />
       <PulseActionsCard />
     </div>
   )
 }
 
-/**
- * `agent.json` holds just a description — anything short of that shape is
- * treated as unreadable rather than guessed at. Duplicated locally rather
- * than shared, same as `parseAgentFile` in AgentDialog.tsx.
- */
-function parseAgentFile(content: string): { description: string } | null {
-  try {
-    const parsed = JSON.parse(content) as { description?: unknown }
-    if (typeof parsed.description !== 'string') return null
-
-    return { description: parsed.description }
-  } catch {
-    return null
-  }
-}
-
-function BasicInfoCard({ name, description }: { name: string; description: string }) {
-  const [heartbeat, setHeartbeat] = useState(DEFAULT_HEARTBEAT)
-  const [maxChildren, setMaxChildren] = useState(DEFAULT_MAX_CHILDREN)
-  const [handholding, setHandholding] = useState(DEFAULT_HANDHOLDING)
-  const [verbosity, setVerbosity] = useState(DEFAULT_VERBOSITY)
-
+function BasicInfoCard({
+  name,
+  data,
+  onChange,
+}: {
+  name: string
+  data: AgentData
+  onChange: (changes: Partial<AgentData>) => void
+}) {
   return (
     <div className="agent-view__card">
       <div className="agent-view__basics">
@@ -131,12 +115,12 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
             </FieldLabel>
             <RangeField
               id="agent-view-heartbeat"
-              min={5}
-              max={120}
-              step={5}
+              min={HEARTBEAT_MIN}
+              max={HEARTBEAT_MAX}
+              step={HEARTBEAT_STEP}
               unit="m"
-              value={heartbeat}
-              onChange={setHeartbeat}
+              value={data.heartbeat}
+              onChange={(heartbeat) => onChange({ heartbeat })}
             />
           </div>
 
@@ -146,12 +130,12 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
             </FieldLabel>
             <RangeField
               id="agent-view-max-children"
-              min={1}
-              max={16}
-              step={1}
+              min={MAX_CHILDREN_MIN}
+              max={MAX_CHILDREN_MAX}
+              step={MAX_CHILDREN_STEP}
               unit=""
-              value={maxChildren}
-              onChange={setMaxChildren}
+              value={data.maxChildren}
+              onChange={(maxChildren) => onChange({ maxChildren })}
             />
           </div>
 
@@ -161,15 +145,15 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
             </FieldLabel>
             <RangeField
               id="agent-view-handholding"
-              min={0}
-              max={100}
-              step={25}
+              min={HANDHOLDING_MIN}
+              max={HANDHOLDING_MAX}
+              step={HANDHOLDING_STEP}
               unit="%"
-              value={handholding}
-              onChange={setHandholding}
+              value={data.handholding}
+              onChange={(handholding) => onChange({ handholding })}
             />
             <p className="agent-view__range-hint">
-              ({HANDHOLDING_DESCRIPTIONS[handholding]})
+              ({HANDHOLDING_DESCRIPTIONS[data.handholding]})
             </p>
           </div>
 
@@ -179,21 +163,22 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
             </FieldLabel>
             <RangeField
               id="agent-view-verbosity"
-              min={0}
-              max={100}
-              step={25}
+              min={VERBOSITY_MIN}
+              max={VERBOSITY_MAX}
+              step={VERBOSITY_STEP}
               unit="%"
-              value={verbosity}
-              onChange={setVerbosity}
+              value={data.verbosity}
+              onChange={(verbosity) => onChange({ verbosity })}
             />
             <p className="agent-view__range-hint">
-              ({VERBOSITY_DESCRIPTIONS[verbosity]})
+              ({VERBOSITY_DESCRIPTIONS[data.verbosity]})
             </p>
           </div>
         </div>
 
         <div className="agent-view__basics-right">
           <h2 className="agent-view__name">{name}</h2>
+          {data.title && <p className="agent-view__title">{data.title}</p>}
 
           <div className="agent-view__buttons">
             <button type="button" className="btn" disabled>
@@ -206,32 +191,16 @@ function BasicInfoCard({ name, description }: { name: string; description: strin
 
           <div className="agent-view__field">
             <span className="modal__label">Description</span>
-            <p className="agent-view__field-text">{description}</p>
+            <p className="agent-view__field-text">{data.description}</p>
           </div>
 
           <div className="agent-view__field">
             <span className="modal__label">Mission</span>
-            <p className="agent-view__field-text">{MISSION}</p>
+            <p className="agent-view__field-text">{data.mission}</p>
           </div>
         </div>
       </div>
     </div>
-  )
-}
-
-function FieldLabel({
-  htmlFor,
-  tooltip,
-  children,
-}: {
-  htmlFor: string
-  tooltip: string
-  children: string
-}) {
-  return (
-    <label className="modal__label" htmlFor={htmlFor} title={tooltip}>
-      {children}
-    </label>
   )
 }
 
@@ -247,37 +216,6 @@ function PulseActionsCard() {
           </li>
         ))}
       </ul>
-    </div>
-  )
-}
-
-type RangeFieldProps = {
-  id: string
-  min: number
-  max: number
-  step: number
-  unit: string
-  value: number
-  onChange: (value: number) => void
-}
-
-function RangeField({ id, min, max, step, unit, value, onChange }: RangeFieldProps) {
-  return (
-    <div className="agent-view__range">
-      <input
-        id={id}
-        type="range"
-        className="agent-view__range-input"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-      <span className="agent-view__range-value">
-        {value}
-        {unit}
-      </span>
     </div>
   )
 }

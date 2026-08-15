@@ -40,11 +40,23 @@ export type WorkflowEdits = {
 export type NewAgentDetails = {
   name: string
   description: string
+  title: string
+  mission: string
+  heartbeat: number
+  maxChildren: number
+  handholding: number
+  verbosity: number
 }
 
 /** What editing an agent can change. Its name is fixed after creation. */
 export type AgentEdits = {
   description: string
+  title: string
+  mission: string
+  heartbeat: number
+  maxChildren: number
+  handholding: number
+  verbosity: number
 }
 
 export const fetchTree = () =>
@@ -129,7 +141,7 @@ export const createAgent = (parent: string, details: NewAgentDetails) =>
     (body) => body.path,
   )
 
-/** Overwrites an existing agent's description. Its path never changes,
+/** Overwrites an existing agent's full agent.json. Its path never changes,
  *  since the name is fixed after creation. */
 export const updateAgent = (path: string, edits: AgentEdits) =>
   request<{ path: string }>('PUT', '/entries', { path, type: 'agent', ...edits }).then(

@@ -45,7 +45,7 @@ export function MainPane({ nodes, selectedPath }: Props) {
     if (found && found.node.type === 'agent') {
       return (
         <main className="main">
-          <AgentView key={found.node.path} path={found.node.path} name={found.node.name} />
+          <AgentView key={found.node.path} path={found.node.path} name={found.node.name} treeVersion={nodes} />
         </main>
       )
     }

@@ -725,6 +725,8 @@ body {
 
 .agent-view__name { margin: 0 0 12px; font-size: 1.2em; font-weight: 600; }
 
+.agent-view__title { margin: -8px 0 12px; color: var(--text-dim); }
+
 .agent-view__buttons { display: flex; gap: 8px; margin: 0 0 14px; }
 
 .agent-view__field + .agent-view__field { margin-top: 14px; }
@@ -951,6 +953,10 @@ body {
 }
 
 .modal__panel--wide { max-width: 440px; }
+
+/* Wide enough for the agent-view__basics two-column layout the agent
+   create/edit form reuses. */
+.modal__panel--agent { max-width: 620px; }
 
 .modal__title {
   margin: 0 0 12px;
