@@ -212,9 +212,12 @@ tree's "Edit" context-menu row (through `ProjectsSidebar.tsx`'s own
 [AgentView.tsx](src/components/AgentView.tsx), which opens the identical
 dialog and saves through the same `tree.updateAgent`, threaded down through
 `MainPane.tsx`; the "Not running"
-status and the Spawn/Logs/Open session controls are still UI-only sample
-values with no session model, no persistence, and no server support behind
-them, the Toolkit section is a hardcoded list with a no-op Edit, and the
+status and the Logs/Open session controls are still UI-only sample values
+with no session model, no persistence, and no server support behind them.
+Spawn opens a menu — "Spawn loop" vs. "Single instance", each with an
+explanatory tooltip — built the same trigger+`Menu.tsx` way as
+[NewMenu.tsx](src/components/NewMenu.tsx), but neither entry is wired to
+anything either. The Toolkit section is a hardcoded list with a no-op Edit, and the
 Stats & usage section below it is deliberately empty — nothing records an
 agent's runtime telemetry yet; see [AgentView.tsx](src/components/AgentView.tsx).
 The numeric sliders stay interactive in the view itself, and dragging one

@@ -29,6 +29,8 @@ import { AgentDialog } from './AgentDialog'
 import { AgentInstructionsModal } from './AgentInstructionsModal'
 import { FieldLabel, RangeField } from './AgentFields'
 import { agentAvatar } from './avatar'
+import { Menu, anchorFromRect } from './Menu'
+import type { MenuAnchor, MenuItem } from './Menu'
 import { SafeMarkdown } from '../views/MarkdownView'
 import {
   BookIcon,
@@ -84,6 +86,23 @@ const TOOL_LOOKS: Record<string, ToolLook> = {
 
 const DEFAULT_TOOL_LOOK: ToolLook = { Icon: WrenchIcon, tint: 'var(--icon)' }
 
+/** Neither option does anything yet — see the "Not yet wired" note in
+ *  ../../CLAUDE.md; this only shapes the entry point into two choices.
+ *  Shared with the tree's right-click "Spawn" row (ProjectTree.tsx) so both
+ *  entry points offer the identical choice. */
+export const SPAWN_ITEMS: MenuItem[] = [
+  {
+    label: 'Spawn loop',
+    title: 'Starts the agent as a recurring loop, running on its own heartbeat.',
+    onSelect: () => {},
+  },
+  {
+    label: 'Single instance',
+    title: 'Starts a single, non-headless, non-screen run that solves one task and stops.',
+    onSelect: () => {},
+  },
+]
+
 /** `treeVersion` is the tree's own `nodes` array — a fresh reference every
  *  time `useProjectTree` reloads, including right after this agent was
  *  edited from the sidebar's dialog. This view has no other way to learn
@@ -103,15 +122,18 @@ type Props = {
  * four numeric settings all come from `agent.json` now, and dragging a
  * slider here saves it (debounced) via `useAgentProfile`. The Instructions
  * card below renders `agent.md` (see `useAgentInstructions`), editable here
- * or from the tree's context menu. Only the "Not running" status and the
- * Spawn/Logs/Open session controls remain sample UI data with nothing behind
- * them yet. See the "Not yet wired" note in ../../CLAUDE.md.
+ * or from the tree's context menu. Spawn opens a menu (loop vs. single
+ * instance) but neither option, nor the "Not running" status, nor
+ * Logs/Open session, do anything yet. See the "Not yet wired" note in
+ * ../../CLAUDE.md.
  */
 export function AgentView({ path, name, node, treeVersion, onSave }: Props) {
   const { data, error, loading, reload, update } = useAgentProfile(path)
   const instructions = useAgentInstructions(path)
   const [editingInstructions, setEditingInstructions] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
+  const [spawnAnchor, setSpawnAnchor] = useState<MenuAnchor | null>(null)
+  const spawnTriggerRef = useRef<HTMLButtonElement>(null)
   /** Skips the redundant reload on mount — `useAgentProfile`/
    *  `useAgentInstructions` already load themselves then; this effect only
    *  needs to fire on a *later* tree reload. */
@@ -151,9 +173,33 @@ export function AgentView({ path, name, node, treeVersion, onSave }: Props) {
           <span className="agent-view__status-dot" aria-hidden="true" />
           {STATUS_LABEL}
         </span>
-        <button type="button" className="btn btn--primary" onClick={() => {}}>
+        <button
+          ref={spawnTriggerRef}
+          type="button"
+          className="btn btn--primary"
+          aria-haspopup="menu"
+          aria-expanded={spawnAnchor !== null}
+          onClick={() =>
+            setSpawnAnchor((prev) => {
+              if (prev) return null
+
+              const rect = spawnTriggerRef.current?.getBoundingClientRect()
+              return rect ? anchorFromRect(rect) : null
+            })
+          }
+        >
           Spawn
         </button>
+
+        {spawnAnchor && (
+          <Menu
+            anchor={spawnAnchor}
+            align="right"
+            ignore={spawnTriggerRef}
+            items={SPAWN_ITEMS}
+            onDismiss={() => setSpawnAnchor(null)}
+          />
+        )}
       </div>
 
       <BasicInfoCard name={name} data={data} onChange={update} onEdit={() => setEditingProfile(true)} />

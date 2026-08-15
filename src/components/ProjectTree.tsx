@@ -14,6 +14,7 @@ import {
 } from '../data/tree'
 import { useAsyncAction } from '../hooks/useAsyncAction'
 import { fileContext, viewFor } from '../views/registry'
+import { SPAWN_ITEMS } from './AgentView'
 import { classes } from './classes'
 import { AgentIcon, ChevronIcon, FileIcon, FolderIcon, WorkflowIcon } from './icons'
 import { Menu, anchorFromPoint } from './Menu'
@@ -106,9 +107,10 @@ export function ProjectTree({ nodes, expanded, selectedPath, draft, ...actions }
  * Four node shapes get a menu of their own instead, short-circuited before any
  * of that: a project's `workflows`/`agents` folder only offers "Add new
  * workflow"/"Add new agent", a `workflow` only offers Edit/Delete, and an
- * `agent` offers Spawn and "Edit instructions" around that same Edit/Delete
- * pair — all a different shape entirely, not this one with items merely
- * disabled.
+ * `agent` offers Spawn's two entries (`SPAWN_ITEMS`, shared with
+ * AgentView.tsx's own Spawn button) and "Edit instructions" around that same
+ * Edit/Delete pair — all a different shape entirely, not this one with items
+ * merely disabled.
  */
 const menuItems = (node: TreeNode, parent: BranchNode | null, actions: Actions): MenuItem[] => {
   if (isWorkflowsFolder(node, parent)) {
@@ -128,8 +130,8 @@ const menuItems = (node: TreeNode, parent: BranchNode | null, actions: Actions):
 
   if (node.type === 'agent') {
     return [
-      // Not wired to anything yet — spawning a session doesn't exist.
-      { label: 'Spawn', onSelect: () => {} },
+      // Same choice, same no-op, as AgentView.tsx's own Spawn button.
+      ...SPAWN_ITEMS,
       { label: 'Edit', onSelect: () => actions.onEditAgent(node) },
       { label: 'Edit instructions', onSelect: () => actions.onEditAgentInstructions(node) },
       { label: 'Delete', danger: true, onSelect: () => actions.onRequestDelete(node) },

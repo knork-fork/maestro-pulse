@@ -10,6 +10,8 @@ export type MenuItem = {
   danger?: boolean
   /** Shown, but refused — so the menu reads the same wherever it is opened. */
   disabled?: boolean
+  /** Native hover tooltip, for an item whose label alone doesn't explain it. */
+  title?: string
 }
 
 /** The box a menu opens against: a trigger's rect, or a zero-size click point. */
@@ -105,6 +107,7 @@ export function Menu({ anchor, align = 'left', items, onDismiss, ignore }: Props
           className={classes(['menu__item', item.danger && 'menu__item--danger'])}
           role="menuitem"
           disabled={item.disabled}
+          title={item.title}
           onClick={() => {
             item.onSelect()
             onDismiss()
