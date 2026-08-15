@@ -1,11 +1,17 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { WorkflowCard } from '../data/api'
 import { useWorkflowBoard } from '../hooks/useWorkflowBoard'
 import { CardDetailModal } from './CardDetailModal'
 import { Column } from './Column'
 import { ConfirmDialog } from './ConfirmDialog'
 
-type Props = { path: string; name: string }
+/** `treeVersion` is the tree's own `nodes` array — a fresh reference every
+ *  time `useProjectTree` reloads, including right after a workflow edit
+ *  saved from the sidebar's dialog. This board has no other way to learn
+ *  that its own workflow.json just changed underneath it, since it reads
+ *  the file directly through its own `useWorkflowBoard` rather than through
+ *  the tree. */
+type Props = { path: string; name: string; treeVersion: unknown }
 
 /**
  * A workflow's board: one Column per entry in workflow.json's `columns`, in
@@ -13,10 +19,18 @@ type Props = { path: string; name: string }
  * modal, and Backlog's delete confirmation) — everything else is a direct
  * call into `useWorkflowBoard`'s mutate-then-reload callbacks.
  */
-export function KanbanBoard({ path, name }: Props) {
+export function KanbanBoard({ path, name, treeVersion }: Props) {
   const state = useWorkflowBoard(path)
   const [openCard, setOpenCard] = useState<WorkflowCard | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<WorkflowCard | null>(null)
+  /** Skips the redundant reload on mount — `useWorkflowBoard` already loads
+   *  itself then; this effect only needs to fire on a *later* tree reload. */
+  const mounted = useRef(false)
+
+  useEffect(() => {
+    if (mounted.current) void state.reload(true)
+    else mounted.current = true
+  }, [treeVersion, state.reload])
   /** Detaches the previous element's listener before attaching to a new one
    *  (or on unmount) — a callback ref, not `useEffect`, because the board's
    *  loading/error branches mean `.board__columns` doesn't exist on mount;

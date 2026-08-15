@@ -60,7 +60,7 @@ dependency-free Node API that owns the folder tree.
 | What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
 | What an agent's own view renders — profile, dummy heartbeat/max-children/mission, sample pulse actions, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
 | A workflow's kanban board — columns, bot/human column styling, per-card move/delete/archive controls, and the read-only card detail modal | [src/components/KanbanBoard.tsx](src/components/KanbanBoard.tsx), [src/components/Column.tsx](src/components/Column.tsx), [src/components/Card.tsx](src/components/Card.tsx), [src/components/CardMoveMenu.tsx](src/components/CardMoveMenu.tsx), [src/components/CardDetailModal.tsx](src/components/CardDetailModal.tsx) |
-| A workflow board's own data — fetch, quiet 60s poll, and the per-card move/delete/archive mutations (moves guarded against a stale column) | [src/hooks/useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) |
+| A workflow board's own data — fetch, quiet 60s poll, an immediate quiet reload whenever the tree reloads, and the per-card move/delete/archive mutations (moves guarded against a stale column) | [src/hooks/useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) |
 | Rename dialog / delete confirmation | [src/components/RenameDialog.tsx](src/components/RenameDialog.tsx), [src/components/ConfirmDialog.tsx](src/components/ConfirmDialog.tsx) |
 | Pending + error state for one user action | [src/hooks/useAsyncAction.ts](src/hooks/useAsyncAction.ts) |
 | Mirroring a Set to localStorage | [src/hooks/usePersistentSet.ts](src/hooks/usePersistentSet.ts) |
@@ -242,7 +242,14 @@ see [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx). Opening a
 workflow's board is a synthetic selection, not a real file — see
 `workflowBoardPath`/`parseBoardPath` in [tree.ts](src/data/tree.ts) and where
 [MainPane.tsx](src/components/MainPane.tsx) checks for it before falling
-through to the file-view logic below.
+through to the file-view logic below. A board reads `workflow.json` through
+its own [useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) rather than
+through the tree, so editing a workflow's description/columns from
+[WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) (which only reloads
+the tree) would otherwise leave an already-open board stale until its next
+60s poll; [MainPane.tsx](src/components/MainPane.tsx) passes the tree's
+`nodes` down to `KanbanBoard` as `treeVersion` so it can quiet-reload the
+instant the tree does.
 
 A workflow's `workflow.json` additionally holds `cards` and `archived`, each a
 flat array of `{ id, title, description, column }`, where `column` names a

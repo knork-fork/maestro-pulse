@@ -29,7 +29,7 @@ export function MainPane({ nodes, selectedPath }: Props) {
     if (board && board.node.type === 'workflow') {
       return (
         <main className="main">
-          <KanbanBoard key={board.node.path} path={board.node.path} name={board.node.name} />
+          <KanbanBoard key={board.node.path} path={board.node.path} name={board.node.name} treeVersion={nodes} />
         </main>
       )
     }
