@@ -287,7 +287,14 @@ and forces `agent` back to `null` whenever `bot` is `false` (`validColumn` in
 [server/index.mjs](server/index.mjs)) — so [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx)
 also refuses to submit until every checked bot column has an agent picked,
 showing "Create an agent for this project first…" when the project has none
-yet (see below for where that agent list comes from). Unlike a project, a workflow's own
+yet (see below for where that agent list comes from). Every column, including
+the fixed Backlog/Done, also carries a required `description` explaining what
+it's for — validated server-side the same way a column name is
+(`requiredText` in `validColumn`) — shown as a hover tooltip on the board's
+column header (`Column.tsx`) and collected, for Backlog/Done too, by
+[WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) even though their
+name stays fixed; the dialog also won't submit until every column has one.
+Unlike a project, a workflow's own
 content (`workflow.json`) can be overwritten after creation, through the same
 type-checked entry point that creates it; see `updateEntry`. Its name cannot —
 see [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx). Opening a

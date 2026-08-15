@@ -190,6 +190,8 @@ async function createEntry(req) {
         ? {
             description: requiredText(body.description, 'description'),
             columns: validColumns(body.columns),
+            backlogDescription: requiredText(body.backlogDescription, 'backlog description'),
+            doneDescription: requiredText(body.doneDescription, 'done description'),
           }
         : type === 'agent'
           ? validAgentDetails(body)
@@ -254,6 +256,8 @@ async function updateEntry(req) {
         ? scaffoldWorkflow(abs, {
             description: requiredText(body.description, 'description'),
             columns: validColumns(body.columns),
+            backlogDescription: requiredText(body.backlogDescription, 'backlog description'),
+            doneDescription: requiredText(body.doneDescription, 'done description'),
           })
         : scaffoldAgent(abs, validAgentDetails(body)),
     `No such ${type}: ${target}`,
@@ -533,8 +537,12 @@ async function scaffoldProject(abs, { name, location, description }) {
  * existing one — the "wrap the client's columns with the fixed ones" rule
  * lives here exactly once so create and edit can never drift apart on it.
  */
-async function scaffoldWorkflow(abs, { description, columns }) {
-  const full = [{ name: FIXED_LEADING_COLUMN }, ...columns, { name: FIXED_TRAILING_COLUMN }]
+async function scaffoldWorkflow(abs, { description, columns, backlogDescription, doneDescription }) {
+  const full = [
+    { name: FIXED_LEADING_COLUMN, bot: false, agent: null, description: backlogDescription },
+    ...columns,
+    { name: FIXED_TRAILING_COLUMN, bot: false, agent: null, description: doneDescription },
+  ]
   const { cards, archived } = await existingCardData(abs)
 
   await writeFile(
@@ -786,7 +794,9 @@ function validColumn(entry) {
   const agent = validAgentRef(entry?.agent)
   if (bot && agent === null) throw new HttpError(400, `Column "${name}" needs an agent`)
 
-  return { name, bot, agent: bot ? agent : null }
+  const description = requiredText(entry?.description, 'column description')
+
+  return { name, bot, agent: bot ? agent : null, description }
 }
 
 /** An agent reference: absent or explicit `null` both mean "none". */

@@ -138,12 +138,13 @@ function parseWorkflowBoard(content: string): WorkflowBoard | null {
 
     const columns: WorkflowColumn[] = []
     for (const entry of parsed.columns) {
-      const column = entry as { name?: unknown; bot?: unknown; agent?: unknown }
+      const column = entry as { name?: unknown; bot?: unknown; agent?: unknown; description?: unknown }
       if (typeof column.name !== 'string') return null
       columns.push({
         name: column.name,
         bot: column.bot === true,
         agent: typeof column.agent === 'string' ? column.agent : null,
+        description: typeof column.description === 'string' ? column.description : '',
       })
     }
 

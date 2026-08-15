@@ -48,7 +48,7 @@ export function Column({
 
   return (
     <div className={classes(['column', isBot ? 'column--bot' : 'column--human'])}>
-      <div className="column__header">
+      <div className="column__header" title={column.description}>
         {isBot && (
           <span className="column__bot-icon" aria-hidden="true">
             🤖

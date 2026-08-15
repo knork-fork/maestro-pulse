@@ -16,8 +16,10 @@ const FIXED_TRAILING_LABEL = 'Done'
  *  deleting stay stable while a name is blank or mid-edit. Bot vs. human is
  *  the explicit `bot` field, the same one the board applies everywhere (see
  *  `isBotColumn` in server/index.mjs) — a bot column must also carry the
- *  agent that runs it. */
-type DraftColumn = { key: string; name: string; bot: boolean; agent: string | null }
+ *  agent that runs it. `description` explains what the column is for, shown
+ *  as a hover tooltip on the board, and is required before the form can
+ *  save. */
+type DraftColumn = { key: string; name: string; bot: boolean; agent: string | null; description: string }
 
 /** An agent a bot column can be assigned to — scoped by the caller to those
  *  living under the same project as the workflow being edited. */
@@ -62,6 +64,8 @@ export function WorkflowDialog(props: Props) {
       initialName=""
       initialDescription=""
       initialColumns={defaultColumns()}
+      initialBacklogDescription={DEFAULT_BACKLOG_DESCRIPTION}
+      initialDoneDescription={DEFAULT_DONE_DESCRIPTION}
       availableAgents={props.availableAgents}
       onCancel={props.onCancel}
       onSubmit={(values) => props.onCreate(values)}
@@ -69,14 +73,33 @@ export function WorkflowDialog(props: Props) {
   )
 }
 
+/** Prefilled descriptions for the fixed Backlog/Done rows, editable like any
+ *  other column's — the user is free to type over them. */
+const DEFAULT_BACKLOG_DESCRIPTION =
+  'Everything that has been requested but not yet reviewed or scheduled. New tickets land here first.'
+const DEFAULT_DONE_DESCRIPTION =
+  'Finished and verified — nothing left to do. Cards stop moving once they land here.'
+
 /** A fresh workflow starts with Ready and Doing already seeded — both
  *  bot-column by default — since both are ordinary, editable columns rather
  *  than anything the server assumes. Each still needs its agent chosen
  *  before the form can be saved. */
 function defaultColumns(): DraftColumn[] {
   return [
-    { key: crypto.randomUUID(), name: 'Ready', bot: true, agent: null },
-    { key: crypto.randomUUID(), name: 'Doing', bot: true, agent: null },
+    {
+      key: crypto.randomUUID(),
+      name: 'Ready',
+      bot: true,
+      agent: null,
+      description: 'Reviewed, prioritized, and waiting to be picked up next by this column’s agent.',
+    },
+    {
+      key: crypto.randomUUID(),
+      name: 'Doing',
+      bot: true,
+      agent: null,
+      description: 'Currently being worked on by this column’s agent, one card at a time.',
+    },
   ]
 }
 
@@ -129,9 +152,18 @@ function EditWorkflowDialog({
       initialName={node.name}
       initialDescription={parsed.description}
       initialColumns={parsed.columns}
+      initialBacklogDescription={parsed.backlogDescription}
+      initialDoneDescription={parsed.doneDescription}
       availableAgents={availableAgents}
       onCancel={onCancel}
-      onSubmit={(values) => onSave({ description: values.description, columns: values.columns })}
+      onSubmit={(values) =>
+        onSave({
+          description: values.description,
+          columns: values.columns,
+          backlogDescription: values.backlogDescription,
+          doneDescription: values.doneDescription,
+        })
+      }
     />
   )
 }
@@ -143,22 +175,34 @@ function EditWorkflowDialog({
  * short of that shape (hand-edited, or from a future format) is treated as
  * unreadable rather than guessed at.
  */
-function parseWorkflowFile(content: string): { description: string; columns: DraftColumn[] } | null {
+function parseWorkflowFile(
+  content: string,
+): { description: string; columns: DraftColumn[]; backlogDescription: string; doneDescription: string } | null {
   try {
     const parsed = JSON.parse(content) as { description?: unknown; columns?: unknown }
     if (typeof parsed.description !== 'string' || !Array.isArray(parsed.columns) || parsed.columns.length < 2) {
       return null
     }
 
-    const editable = parsed.columns.slice(1, -1) as Array<{ name?: unknown; bot?: unknown; agent?: unknown }>
+    type RawColumn = { name?: unknown; bot?: unknown; agent?: unknown; description?: unknown }
+    const rawColumns = parsed.columns as RawColumn[]
+    const columnDescription = (column: RawColumn) => (typeof column.description === 'string' ? column.description : '')
+
+    const editable = rawColumns.slice(1, -1)
     const columns: DraftColumn[] = editable.map((column) => ({
       key: crypto.randomUUID(),
       name: typeof column.name === 'string' ? column.name : '',
       bot: column.bot === true,
       agent: typeof column.agent === 'string' ? column.agent : null,
+      description: columnDescription(column),
     }))
 
-    return { description: parsed.description, columns }
+    return {
+      description: parsed.description,
+      columns,
+      backlogDescription: columnDescription(rawColumns[0]),
+      doneDescription: columnDescription(rawColumns[rawColumns.length - 1]),
+    }
   } catch {
     return null
   }
@@ -171,9 +215,17 @@ type FormProps = {
   initialName: string
   initialDescription: string
   initialColumns: DraftColumn[]
+  initialBacklogDescription: string
+  initialDoneDescription: string
   availableAgents: AvailableAgent[]
   onCancel: () => void
-  onSubmit: (values: { name: string; description: string; columns: CustomWorkflowColumn[] }) => Promise<void>
+  onSubmit: (values: {
+    name: string
+    description: string
+    columns: CustomWorkflowColumn[]
+    backlogDescription: string
+    doneDescription: string
+  }) => Promise<void>
 }
 
 function WorkflowForm({
@@ -182,6 +234,8 @@ function WorkflowForm({
   initialName,
   initialDescription,
   initialColumns,
+  initialBacklogDescription,
+  initialDoneDescription,
   availableAgents,
   onCancel,
   onSubmit,
@@ -189,6 +243,8 @@ function WorkflowForm({
   const [name, setName] = useState(initialName)
   const [description, setDescription] = useState(initialDescription)
   const [columns, setColumns] = useState<DraftColumn[]>(initialColumns)
+  const [backlogDescription, setBacklogDescription] = useState(initialBacklogDescription)
+  const [doneDescription, setDoneDescription] = useState(initialDoneDescription)
   const { pending, error, run } = useAsyncAction()
   const fieldId = useId()
   /** Which card is mid-drag — a ref, since it drives no render of its own. */
@@ -204,7 +260,9 @@ function WorkflowForm({
   const complete =
     trimmedDescription.length > 0 &&
     (!nameEditable || trimmedName.length > 0) &&
-    columns.every((column) => column.name.trim().length > 0) &&
+    columns.every((column) => column.name.trim().length > 0 && column.description.trim().length > 0) &&
+    backlogDescription.trim().length > 0 &&
+    doneDescription.trim().length > 0 &&
     !missingAgent
 
   const updateColumn = (key: string, patch: Partial<DraftColumn>) =>
@@ -219,7 +277,7 @@ function WorkflowForm({
   const addColumn = () => {
     const key = crypto.randomUUID()
     flushSync(() => {
-      setColumns((prev) => [...prev, { key, name: '', bot: false, agent: null }])
+      setColumns((prev) => [...prev, { key, name: '', bot: false, agent: null, description: '' }])
     })
     nameInputs.current.get(key)?.focus()
   }
@@ -252,13 +310,16 @@ function WorkflowForm({
           name: column.name.trim(),
           bot: column.bot,
           agent: column.agent,
+          description: column.description.trim(),
         })),
+        backlogDescription: backlogDescription.trim(),
+        doneDescription: doneDescription.trim(),
       }),
     )
   }
 
   return (
-    <Modal title={title} wide onCancel={onCancel}>
+    <Modal title={title} wide className="modal__panel--workflow" onCancel={onCancel}>
       <form
         onSubmit={(event) => {
           event.preventDefault()
@@ -297,7 +358,19 @@ function WorkflowForm({
           <span className="modal__label">Columns</span>
 
           <ul className="columns">
-            <li className="column-card column-card--fixed">{FIXED_LEADING_LABEL}</li>
+            <li className="column-card column-card--fixed">
+              <span className="column-card__name-label">{FIXED_LEADING_LABEL}</span>
+              <span />
+              <textarea
+                className="modal__input column-card__description"
+                value={backlogDescription}
+                placeholder="Describe what the column is for"
+                disabled={pending}
+                aria-label="Backlog column description"
+                onChange={(event) => setBacklogDescription(event.target.value)}
+              />
+              <span />
+            </li>
 
             {columns.map((column) => (
               <li
@@ -336,26 +409,26 @@ function WorkflowForm({
                   }}
                 />
 
-                <label className="column-card__bot">
-                  <input
-                    type="checkbox"
-                    disabled={pending}
-                    checked={column.bot}
-                    onChange={(event) =>
-                      updateColumn(column.key, {
-                        bot: event.target.checked,
-                        agent: event.target.checked ? column.agent : null,
-                      })
-                    }
-                  />
-                  Bot column
-                </label>
+                <div className="column-card__meta">
+                  <label className="column-card__bot">
+                    <input
+                      type="checkbox"
+                      disabled={pending}
+                      checked={column.bot}
+                      onChange={(event) =>
+                        updateColumn(column.key, {
+                          bot: event.target.checked,
+                          agent: event.target.checked ? column.agent : null,
+                        })
+                      }
+                    />
+                    Bot column
+                  </label>
 
-                {column.bot && (
                   <select
                     className="modal__input column-card__agent"
                     aria-label="Agent"
-                    disabled={pending}
+                    disabled={pending || !column.bot}
                     value={column.agent ?? ''}
                     onChange={(event) => updateColumn(column.key, { agent: event.target.value || null })}
                   >
@@ -368,7 +441,16 @@ function WorkflowForm({
                       </option>
                     ))}
                   </select>
-                )}
+                </div>
+
+                <textarea
+                  className="modal__input column-card__description"
+                  value={column.description}
+                  placeholder="Describe what the column is for"
+                  disabled={pending}
+                  aria-label="Column description"
+                  onChange={(event) => updateColumn(column.key, { description: event.target.value })}
+                />
 
                 <button
                   type="button"
@@ -383,7 +465,19 @@ function WorkflowForm({
               </li>
             ))}
 
-            <li className="column-card column-card--fixed">{FIXED_TRAILING_LABEL}</li>
+            <li className="column-card column-card--fixed">
+              <span className="column-card__name-label">{FIXED_TRAILING_LABEL}</span>
+              <span />
+              <textarea
+                className="modal__input column-card__description"
+                value={doneDescription}
+                placeholder="Describe what the column is for"
+                disabled={pending}
+                aria-label="Done column description"
+                onChange={(event) => setDoneDescription(event.target.value)}
+              />
+              <span />
+            </li>
           </ul>
 
           <button type="button" className="btn" disabled={pending} onClick={addColumn}>

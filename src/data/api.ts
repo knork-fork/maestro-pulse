@@ -18,23 +18,32 @@ export type ProjectDetails = {
  *  never part of this: the server adds them unconditionally. Ready and Doing
  *  are ordinary columns like any other, just seeded by default. A bot column
  *  must also name the agent that runs it; a human column's `agent` is
- *  always `null`. */
+ *  always `null`. `description` explains what the column is for — shown as
+ *  a hover tooltip on the board — and is required for every column. */
 export type CustomWorkflowColumn = {
   name: string
   bot: boolean
   agent: string | null
+  description: string
 }
 
 export type NewWorkflowDetails = {
   name: string
   description: string
   columns: CustomWorkflowColumn[]
+  /** Descriptions for the fixed Backlog/Done columns, which aren't part of
+   *  `columns` — the server assembles them, but the client still collects
+   *  and validates their description like any other column's. */
+  backlogDescription: string
+  doneDescription: string
 }
 
 /** What editing a workflow can change. Its name is fixed after creation. */
 export type WorkflowEdits = {
   description: string
   columns: CustomWorkflowColumn[]
+  backlogDescription: string
+  doneDescription: string
 }
 
 export type NewAgentDetails = {
@@ -111,6 +120,8 @@ export type WorkflowColumn = {
   name: string
   bot: boolean
   agent: string | null
+  /** What the column is for — shown as a hover tooltip; see `Column.tsx`. */
+  description: string
 }
 
 /** A card references its column by name, not id — the same no-id convention

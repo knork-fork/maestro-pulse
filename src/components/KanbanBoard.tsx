@@ -88,12 +88,13 @@ export function KanbanBoard({ path, name, treeVersion }: Props) {
     )
   }
 
-  const { columns, cards } = state.board
+  const { description, columns, cards } = state.board
   const lastIndex = columns.length - 1
 
   return (
     <div className="board">
       <h1 className="board__title">{name}</h1>
+      <p className="board__description">{description}</p>
 
       <div className="board__columns" ref={setColumnsRef}>
         {columns.map((column, index) => (

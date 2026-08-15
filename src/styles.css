@@ -411,10 +411,17 @@ body {
 
 .board__title {
   flex: none;
-  margin: 0 0 14px;
+  margin: 0 0 4px;
   font-size: 1.2em;
   font-weight: 600;
   color: #ededf0;
+}
+
+.board__description {
+  flex: none;
+  width: 100%;
+  margin: 0 0 14px;
+  color: var(--text-dim);
 }
 
 .board__columns {
@@ -1140,6 +1147,9 @@ body {
 /* Wide enough for a comfortable multi-line instructions editor. */
 .modal__panel--instructions { max-width: 760px; }
 
+/* Wide enough for the columns editor's 3-column grid per row. */
+.modal__panel--workflow { max-width: 860px; }
+
 .modal__title {
   margin: 0 0 12px;
   font-size: 14px;
@@ -1264,9 +1274,17 @@ body {
   list-style: none;
 }
 
+/* Three columns (name / bot+agent / description) plus a fixed-width remove
+ * button — the same four tracks for every row, editable or fixed, so they
+ * all line up; a fixed row's unused tracks are empty spacer elements. */
+/* A fixed row height, the same for every row whether it's a fixed
+ * (Backlog/Done) or editable one — the name/remove cells center themselves
+ * within it, while the meta and description cells stretch to fill it. */
 .column-card {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 100px 190px 1fr 22px;
+  align-items: stretch;
+  height: 76px;
   gap: 8px;
   padding: 6px 8px;
   border: 1px solid var(--border);
@@ -1274,30 +1292,58 @@ body {
   background: var(--input-bg);
 }
 
-/* Backlog and Done: shown for shape, not offered for editing. */
+/* Backlog and Done: name shown for shape, not offered for editing. */
 .column-card--fixed {
-  color: var(--text-dim);
   cursor: default;
 }
 
 .column-card[draggable="true"] { cursor: grab; }
 .column-card[draggable="true"]:active { cursor: grabbing; }
 
-.column-card__name { flex: 1; }
+.column-card__name,
+.column-card__name-label {
+  align-self: center;
+}
+
+.column-card__name-label { color: var(--text-dim); }
+
+/* Stacked, not side-by-side, so the agent select gets the full track width
+ * to itself instead of splitting it with the checkbox label. Centered
+ * within the row's fixed height rather than stretched, since it doesn't
+ * need the full height the way the description textarea does. */
+.column-card__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  align-self: center;
+  gap: 6px;
+}
 
 .column-card__bot {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: none;
   white-space: nowrap;
   color: var(--text-dim);
 }
 
-.column-card__agent { flex: none; width: 140px; }
+.column-card__agent { width: 100%; }
+
+.column-card__agent:disabled {
+  opacity: 45%;
+  background: var(--bg-sidebar);
+  cursor: not-allowed;
+}
+
+.column-card__description {
+  height: 100%;
+  resize: none;
+  line-height: 1.4;
+}
 
 .column-card__remove {
-  flex: none;
+  align-self: center;
   width: 22px;
   height: 22px;
   border: 0;
