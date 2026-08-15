@@ -712,6 +712,19 @@ body {
 
 .agent-view__card-header .agent-view__card-title { margin: 0; }
 
+.agent-view__toolkit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px 16px;
+}
+
+.agent-view__toolkit-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
 .agent-view__basics { display: flex; gap: 24px; }
 
 .agent-view__basics-left {
@@ -956,9 +969,8 @@ body {
    create/edit form reuses. */
 .modal__panel--agent { max-width: 620px; }
 
-/* Wide enough for a comfortable multi-line instructions editor — wider than
-   modal__panel--agent so a template's bullet lines rarely wrap. */
-.modal__panel--instructions { max-width: 860px; }
+/* Wide enough for a comfortable multi-line instructions editor. */
+.modal__panel--instructions { max-width: 760px; }
 
 .modal__title {
   margin: 0 0 12px;

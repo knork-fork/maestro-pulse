@@ -29,6 +29,22 @@ import { SafeMarkdown } from '../views/MarkdownView'
 
 const STATUS_LABEL = 'Not running'
 
+/** Placeholder — no real toolkit data source yet; see the "Not yet wired"
+ *  note in ../../CLAUDE.md once a toolkit modal/data shape exists. */
+const TOOLKIT_TOOLS = [
+  'Create PR',
+  'Run Tests',
+  'Read File',
+  'Edit File',
+  'Search Codebase',
+  'Run Shell Command',
+  'Git Commit',
+  'View Diff',
+  'Lint Code',
+  'Deploy Preview',
+  'Fetch Docs',
+]
+
 /** `treeVersion` is the tree's own `nodes` array — a fresh reference every
  *  time `useProjectTree` reloads, including right after this agent was
  *  edited from the sidebar's dialog. This view has no other way to learn
@@ -97,6 +113,7 @@ export function AgentView({ path, name, treeVersion }: Props) {
         error={instructions.error}
         onEdit={() => setEditingInstructions(true)}
       />
+      <ToolkitCard />
 
       {editingInstructions && (
         <AgentInstructionsModal
@@ -252,6 +269,30 @@ function InstructionsCard({
       ) : (
         <SafeMarkdown content={content} />
       )}
+    </div>
+  )
+}
+
+/** Static placeholder list — the toolkit modal that will make this editable
+ *  doesn't exist yet, so Edit is a no-op. */
+function ToolkitCard() {
+  return (
+    <div className="agent-view__card">
+      <div className="agent-view__card-header">
+        <h3 className="agent-view__card-title">Toolkit</h3>
+        <button type="button" className="btn" onClick={() => {}}>
+          Edit
+        </button>
+      </div>
+
+      <div className="agent-view__toolkit-grid">
+        {TOOLKIT_TOOLS.map((tool) => (
+          <div className="agent-view__toolkit-item" key={tool}>
+            <span aria-hidden="true">🔧</span>
+            <span>{tool}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
