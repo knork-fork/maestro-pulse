@@ -445,7 +445,7 @@ async function getAddToBacklogSkill(req, url) {
   const rawInstructions = await readFile(path.join(abs, WORKFLOW_INSTRUCTIONS_FILE), 'utf8').catch(() => '')
   const trimmedInstructions = rawInstructions.trim()
   const workflowInstructions = trimmedInstructions
-    ? `## This workflow's instructions\n\n${trimmedInstructions}\n`
+    ? `----\n\n${trimmedInstructions}\n`
     : ''
 
   const template = await readFile(ADD_TO_BACKLOG_TEMPLATE, 'utf8')

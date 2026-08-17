@@ -18,15 +18,7 @@ done. Do not create the ticket immediately from that alone:
    anything. Only proceed once you have enough to write a clear, actionable
    ticket.
 
-The workflow's own rules are below, for your context only — every card in
-this workflow is already subject to them, so do not restate them in the
-ticket. In particular, never write into the ticket description where the
-card should move, who picks it up, or any other card-movement/handoff
-mechanics; those are enforced by the workflow itself. Keep the description
-scoped to what makes this task specific: what's being asked and any context
-needed to do it.
-
-{{WORKFLOW_INSTRUCTIONS}}
+## Creating the card
 
 Once you have a title and a description you're confident in, create the card
 by sending:
@@ -44,3 +36,15 @@ Content-Type: application/json
 
 The card is added to the top of the Backlog column. Confirm to the user once
 it's created.
+
+## This workflow's own rules
+
+The rules below are for your context only — every card in this workflow is
+already subject to them, so do not restate them in the ticket. In
+particular, never write into the ticket description where the card should
+move, who picks it up, or any other card-movement/handoff mechanics; those
+are enforced by the workflow itself. Keep the description scoped to what
+makes this task specific: what's being asked and any context needed to do
+it.
+
+{{WORKFLOW_INSTRUCTIONS}}
