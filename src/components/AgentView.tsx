@@ -33,30 +33,12 @@ import { Menu, anchorFromRect } from './Menu'
 import type { MenuAnchor, MenuItem } from './Menu'
 import { SafeMarkdown } from '../views/MarkdownView'
 import { toolLook } from '../data/toolIcons'
-import type { ToolIconType } from '../data/toolIcons'
+import { toolTooltip } from '../data/tool'
+import type { ToolCatalogEntry } from '../hooks/useProjectTools'
+import { useProjectTools } from '../hooks/useProjectTools'
+import { AgentToolsModal } from './AgentToolsModal'
 
 const STATUS_LABEL = 'Not running'
-
-/** Placeholder — no real toolkit data source yet; see the "Not yet wired"
- *  note in ../../CLAUDE.md once a toolkit modal/data shape exists. One entry
- *  per entry in ../data/toolIcons.ts's vocabulary, so every icon (including
- *  the `wrench` fallback) has a visible tile to inspect. */
-const TOOLKIT_TOOLS: { name: string; icon: ToolIconType }[] = [
-  { name: 'Branch', icon: 'branch' },
-  { name: 'Commit', icon: 'commit' },
-  { name: 'Diff', icon: 'diff' },
-  { name: 'Terminal', icon: 'terminal' },
-  { name: 'Search', icon: 'search' },
-  { name: 'File', icon: 'file' },
-  { name: 'Edit', icon: 'edit' },
-  { name: 'Play', icon: 'play' },
-  { name: 'Book', icon: 'book' },
-  { name: 'List', icon: 'list' },
-  { name: 'Move', icon: 'move' },
-  { name: 'Push', icon: 'push' },
-  { name: 'Board', icon: 'board' },
-  { name: 'Wrench', icon: 'wrench' },
-]
 
 /** Neither option does anything yet — see the "Not yet wired" note in
  *  ../../CLAUDE.md; this only shapes the entry point into two choices.
@@ -80,12 +62,15 @@ export const SPAWN_ITEMS: MenuItem[] = [
  *  edited from the sidebar's dialog. This view has no other way to learn
  *  that its own agent.json just changed underneath it, since it reads the
  *  file directly through its own `useAgentProfile` rather than through the
- *  tree — mirrors KanbanBoard.tsx's identical `treeVersion` convention. */
+ *  tree — mirrors KanbanBoard.tsx's identical `treeVersion` convention.
+ *  Unlike that convention elsewhere, this view also reads its *structure* —
+ *  see `useProjectTools`, which locates the owning project's `tools/`
+ *  folder in it. */
 type Props = {
   path: string
   name: string
   node: TreeNode
-  treeVersion: unknown
+  treeVersion: TreeNode[]
   onSave: (path: string, edits: AgentEdits) => Promise<void>
 }
 
@@ -102,8 +87,10 @@ type Props = {
 export function AgentView({ path, name, node, treeVersion, onSave }: Props) {
   const { data, error, loading, reload, update } = useAgentProfile(path)
   const instructions = useAgentInstructions(path)
+  const { tools: catalog } = useProjectTools(treeVersion, path)
   const [editingInstructions, setEditingInstructions] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
+  const [editingTools, setEditingTools] = useState(false)
   const [spawnAnchor, setSpawnAnchor] = useState<MenuAnchor | null>(null)
   const spawnTriggerRef = useRef<HTMLButtonElement>(null)
   /** Skips the redundant reload on mount — `useAgentProfile`/
@@ -180,8 +167,20 @@ export function AgentView({ path, name, node, treeVersion, onSave }: Props) {
         error={instructions.error}
         onEdit={() => setEditingInstructions(true)}
       />
-      <ToolkitCard />
+      <ToolkitCard tools={data.tools} catalog={catalog} onEdit={() => setEditingTools(true)} />
       <StatsCard />
+
+      {editingTools && (
+        <AgentToolsModal
+          catalog={catalog}
+          selected={data.tools}
+          onSave={async (tools) => {
+            await onSave(path, { ...data, tools })
+            setEditingTools(false)
+          }}
+          onCancel={() => setEditingTools(false)}
+        />
+      )}
 
       {editingInstructions && (
         <AgentInstructionsModal
@@ -364,33 +363,59 @@ function InstructionsCard({
   )
 }
 
-/** Static placeholder list — the toolkit modal that will make this editable
- *  doesn't exist yet, so Edit is a no-op. */
-function ToolkitCard() {
+/** An agent's toolkit: `agent.json`'s own `tools` (project-relative paths),
+ *  resolved against the project's tool catalog for a title/icon — see
+ *  `useProjectTools`. A path with no matching catalog entry (the tool was
+ *  deleted from disk after being picked) still shows, using the raw path as
+ *  its title. Edit opens `AgentToolsModal`. */
+function ToolkitCard({
+  tools,
+  catalog,
+  onEdit,
+}: {
+  tools: string[]
+  catalog: ToolCatalogEntry[]
+  onEdit: () => void
+}) {
   return (
     <div className="agent-view__card">
       <div className="agent-view__card-header">
         <h3 className="agent-view__card-title">Toolkit</h3>
-        <button type="button" className="btn btn--sm" onClick={() => {}}>
+        <button type="button" className="btn btn--sm" onClick={onEdit}>
           Edit
         </button>
       </div>
 
-      <div className="agent-view__toolkit-grid">
-        {TOOLKIT_TOOLS.map(({ name, icon }) => {
-          const { Icon, tint } = toolLook(icon)
-          return (
-            <div
-              className="agent-view__tool"
-              key={name}
-              style={{ '--tool-tint': tint } as CSSProperties}
-            >
-              <Icon className="agent-view__tool-icon" />
-              <span className="agent-view__tool-name">{name}</span>
-            </div>
-          )
-        })}
-      </div>
+      {tools.length === 0 ? (
+        <p className="empty-state">No tools</p>
+      ) : (
+        <div className="agent-view__toolkit-grid">
+          {tools.map((path) => {
+            const tool = catalog.find((entry) => entry.path === path) ?? {
+              path,
+              title: path,
+              description: '',
+              icon: null,
+            }
+            const { Icon, tint } = toolLook(tool.icon)
+            return (
+              <div
+                className="agent-view__tool"
+                key={path}
+                title={toolTooltip(tool)}
+                style={{ '--tool-tint': tint } as CSSProperties}
+              >
+                {tool.icon === null ? (
+                  <span className="agent-view__tool-icon" />
+                ) : (
+                  <Icon className="agent-view__tool-icon" />
+                )}
+                <span className="agent-view__tool-name">{tool.title}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -55,6 +55,7 @@ export type NewAgentDetails = {
   maxChildren: number
   handholding: number
   verbosity: number
+  tools: string[]
 }
 
 /** What editing an agent can change. Its name is fixed after creation. */
@@ -66,6 +67,7 @@ export type AgentEdits = {
   maxChildren: number
   handholding: number
   verbosity: number
+  tools: string[]
 }
 
 export const fetchTree = () =>

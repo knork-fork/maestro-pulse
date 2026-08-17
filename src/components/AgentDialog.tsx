@@ -46,6 +46,7 @@ const EMPTY_AGENT: AgentData = {
   maxChildren: DEFAULT_MAX_CHILDREN,
   handholding: DEFAULT_HANDHOLDING,
   verbosity: DEFAULT_VERBOSITY,
+  tools: [],
 }
 
 /**
@@ -166,6 +167,9 @@ function AgentForm({ title, nameEditable, initialName, initial, onCancel, onSubm
         maxChildren,
         handholding,
         verbosity,
+        // Not edited by this form — the Toolkit modal owns it; carry
+        // whatever was loaded through unchanged.
+        tools: initial.tools,
       }),
     )
   }

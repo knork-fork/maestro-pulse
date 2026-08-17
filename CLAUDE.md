@@ -60,9 +60,12 @@ dependency-free Node API that owns the folder tree.
 | What a workflow is created/edited with, columns and its own `workflow.md` instructions (with template picker) included | [src/components/WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) |
 | The workflow instruction templates (Development, QA, Potentials & Leads/Sales, R&D, Management, Review/Audit) the dialog's template picker offers | [src/data/workflowTemplates.ts](src/data/workflowTemplates.ts) |
 | What an agent is created/edited with | [src/components/AgentDialog.tsx](src/components/AgentDialog.tsx) |
-| What an agent's own view renders — real profile fields, its rendered `agent.md` instructions, the placeholder toolkit and empty stats sections, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
+| What an agent's own view renders — real profile fields, its rendered `agent.md` instructions, its real Toolkit and the empty stats section, and the no-op Spawn/disabled Logs/Open session controls | [src/components/AgentView.tsx](src/components/AgentView.tsx) |
 | An agent's data shape, numeric bounds/defaults, and the shared `agent.json` parser | [src/data/agent.ts](src/data/agent.ts) |
 | The shared toolkit icon-type vocabulary — the classified set a Toolkit tile (and a tool's own `tool.json`) picks an icon from | [src/data/toolIcons.ts](src/data/toolIcons.ts) |
+| A tool's own shape (`tool.json`: name/description/icon) and its parser | [src/data/tool.ts](src/data/tool.ts) |
+| A project's tool catalog — reads its `tools/` folder off the already-loaded tree and each entry's `tool.json`, for both the Toolkit card and its edit modal | [src/hooks/useProjectTools.ts](src/hooks/useProjectTools.ts) |
+| The Toolkit card's Edit modal — two-list tool picker (selected vs. available, with a filter), saved back through `agent.json`'s `tools` | [src/components/AgentToolsModal.tsx](src/components/AgentToolsModal.tsx) |
 | The slider/label controls shared by an agent's view and its dialog | [src/components/AgentFields.tsx](src/components/AgentFields.tsx) |
 | An agent view's own `agent.json` — fetch, quiet reload driven by the tree, and the debounced per-slider save | [src/hooks/useAgentProfile.ts](src/hooks/useAgentProfile.ts) |
 | An agent's own `agent.md` — fetch, quiet reload driven by the tree, and `save` for the view's own Edit button | [src/hooks/useAgentInstructions.ts](src/hooks/useAgentInstructions.ts) |
@@ -218,9 +221,9 @@ with no session model, no persistence, and no server support behind them.
 Spawn opens a menu — "Spawn loop" vs. "Single instance", each with an
 explanatory tooltip — built the same trigger+`Menu.tsx` way as
 [NewMenu.tsx](src/components/NewMenu.tsx), but neither entry is wired to
-anything either. The Toolkit section is a hardcoded list with a no-op Edit, and the
-Stats & usage section below it is deliberately empty — nothing records an
-agent's runtime telemetry yet; see [AgentView.tsx](src/components/AgentView.tsx).
+anything either. The Stats & usage section is deliberately empty — nothing
+records an agent's runtime telemetry yet; see
+[AgentView.tsx](src/components/AgentView.tsx).
 The numeric sliders stay interactive in the view itself, and dragging one
 there saves it too — both the view's sliders and the modal write to the same
 `agent.json`, through `useAgentProfile.ts`'s debounced `update` and
@@ -246,6 +249,20 @@ between the view's sliders and the sidebar's dialog. `agent.md` is
 scaffolded with a placeholder on creation and is never touched by an
 `agent.json` edit (description/title/mission/sliders), or vice versa — see
 `updateAgentInstructions` in [server/index.mjs](server/index.mjs).
+
+The Toolkit card is real too, not a placeholder: it renders `agent.json`'s own
+`tools` field (project-relative paths, e.g. `"tools/read-from-trello"`,
+resolved to a name/icon against the owning project's tool catalog — see
+[useProjectTools.ts](src/hooks/useProjectTools.ts) and the data-shape section
+below), showing "No tools" when that array is empty. Its "Edit" button opens
+[AgentToolsModal.tsx](src/components/AgentToolsModal.tsx), a two-list picker
+(selected vs. available, the latter filterable) that saves by reusing the
+same `onSave`/`tree.updateAgent` path the Profile dialog already writes
+`agent.json` through — full-overwrite, so `AgentDialog.tsx`'s own form
+carries `tools` through unedited rather than dropping it. This is a third
+independent write path into `agent.json`, alongside the view's sliders and
+the Profile dialog, the same dual/triple-path shape `agent.md` and
+`workflow.json` already have elsewhere in this file.
 
 ## Data shape
 
@@ -394,10 +411,10 @@ project's `agents` folder instead — see `scaffoldAgent` in
 [server/index.mjs](server/index.mjs) and
 [AgentDialog.tsx](src/components/AgentDialog.tsx). It has nothing analogous to
 a workflow's columns, so its own content (`agent.json`) is just its
-`AgentData` shape — description, title, mission, and the four numeric
-settings, see [src/data/agent.ts](src/data/agent.ts) — editable the same
-narrow way through `updateEntry`, which validates it server-side against the
-same bounds `agent.ts` declares; its name is likewise
+`AgentData` shape — description, title, mission, the four numeric
+settings, and `tools` (see below), see [src/data/agent.ts](src/data/agent.ts)
+— editable the same narrow way through `updateEntry`, which validates it
+server-side against the same bounds `agent.ts` declares; its name is likewise
 fixed. An agent additionally gets `agent.md` alongside `agent.json` — its
 system/personalization instructions as raw markdown, scaffolded with a
 placeholder (`DEFAULT_AGENT_INSTRUCTIONS`) only on creation, and edited
@@ -409,6 +426,23 @@ board — see `agentViewPath`/`parseAgentViewPath` in
 the agents living under the same project; [ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx)
 computes that list from the already-loaded tree (there is no dedicated list
 endpoint) and hands it to [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx).
+
+`AgentData.tools` is a flat `string[]` of project-relative paths into that
+project's own `tools/` folder (e.g. `"tools/read-from-trello"`) — no other
+metadata travels with them. `tools/` is one of every project's
+`PROJECT_SUBDIRECTORIES`, but — unlike `agents/`/`workflows/` — nothing
+inside it is a marked/creatable type; a tool is a plain subfolder holding
+`tool.sh` plus `.env`/`.env.local` (a project store's own CLAUDE.md, e.g.
+`resources/projects/giscloud/CLAUDE.md`, documents that convention in full —
+maestro-pulse itself never reads those three) and `tool.json`
+(`{title, description, icon}`, parsed by
+[src/data/tool.ts](src/data/tool.ts)), picked up the same "no dedicated list
+endpoint, read straight off the already-loaded tree" way the workflow-agent
+list above is (see `useProjectTools.ts`). `icon` names a key from
+[toolIcons.ts](src/data/toolIcons.ts)'s classified vocabulary; missing/`null`/
+the literal string `"null"` all mean "no icon" (rendered as reserved empty
+space) rather than falling back to that vocabulary's own wrench default,
+which is reserved for an unrecognized (as opposed to absent) icon key.
 
 A file's contents cross the wire as text wrapped in JSON, because the API has no
 non-JSON response path. The read is capped and refuses anything that is not a

@@ -11,6 +11,11 @@ export type AgentData = {
   maxChildren: number
   handholding: number
   verbosity: number
+  /** Project-relative paths into this agent's project's `tools/` folder
+   *  (e.g. `"tools/read-from-trello"`) — no other metadata; a tool's own
+   *  name/description/icon live in that folder's `tool.json`, read via
+   *  `useProjectTools`. */
+  tools: string[]
 }
 
 export const HEARTBEAT_MIN = 5
@@ -70,6 +75,12 @@ function stringOr(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
 }
 
+function stringArrayOr(value: unknown, fallback: string[]): string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
+    ? value
+    : fallback
+}
+
 /**
  * `description` must be a string or the whole file is unreadable, same rule
  * as before this shape grew. Every other field falls back to its default
@@ -89,6 +100,7 @@ export function parseAgentFile(content: string): AgentData | null {
       maxChildren: numberOr(parsed.maxChildren, DEFAULT_MAX_CHILDREN),
       handholding: numberOr(parsed.handholding, DEFAULT_HANDHOLDING),
       verbosity: numberOr(parsed.verbosity, DEFAULT_VERBOSITY),
+      tools: stringArrayOr(parsed.tools, []),
     }
   } catch {
     return null

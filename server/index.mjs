@@ -873,7 +873,8 @@ function validAgentRef(input) {
  * `createEntry` and `updateEntry`. `description` keeps the existing
  * required-text rule; `title`/`mission` are optional free text; the numeric
  * fields fall back to their defaults when absent, so a body from before
- * these fields existed still validates.
+ * these fields existed still validates. `tools` likewise defaults to `[]`
+ * for the same reason.
  */
 function validAgentDetails(body) {
   return {
@@ -904,7 +905,33 @@ function validAgentDetails(body) {
       step: VERBOSITY_STEP,
       fallback: DEFAULT_VERBOSITY,
     }),
+    tools: validTools(body.tools),
   }
+}
+
+/**
+ * An agent's toolkit — project-relative paths (e.g. `"tools/read-from-trello"`)
+ * into its project's `tools/` folder. No other metadata travels with them; a
+ * tool's own name/description/icon live in that folder's `tool.json`. Absent
+ * means "no tools" rather than an error, for the same before-this-field-existed
+ * reason every other agent.json field defaults. Deliberately shallow — this
+ * does not check the referenced folder exists, matching the app's existing
+ * tolerance for a stale reference (e.g. a renamed workflow column orphaning
+ * its cards).
+ */
+function validTools(input) {
+  if (input === undefined) return []
+  if (!Array.isArray(input)) throw new HttpError(400, '"tools" must be an array')
+
+  return input.map((entry, i) => {
+    if (typeof entry !== 'string') throw new HttpError(400, `"tools[${i}]" must be a string`)
+    const value = entry.trim()
+    if (!value) throw new HttpError(400, `"tools[${i}]" cannot be empty`)
+    if (value.length > MAX_TEXT_LENGTH) throw new HttpError(400, `"tools[${i}]" is too long`)
+    if (value.includes('\0')) throw new HttpError(400, `"tools[${i}]" is invalid`)
+
+    return value
+  })
 }
 
 /** Like `requiredText`, but empty is allowed rather than rejected. */
