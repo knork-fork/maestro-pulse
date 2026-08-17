@@ -1042,7 +1042,7 @@ body {
 /* The accent rule frames the rendered agent.md, so it has to stay visible
    against the panel — hence --icon rather than --border. */
 .agent-view__instructions {
-  max-width: 68ch;
+  max-width: 90ch;
   padding-left: 28px;
   border-left: 3px solid var(--icon);
 }
