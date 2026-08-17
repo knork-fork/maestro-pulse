@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ComponentType, CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import {
   HANDHOLDING_DESCRIPTIONS,
   HANDHOLDING_MAX,
@@ -32,59 +32,31 @@ import { agentAvatar } from './avatar'
 import { Menu, anchorFromRect } from './Menu'
 import type { MenuAnchor, MenuItem } from './Menu'
 import { SafeMarkdown } from '../views/MarkdownView'
-import {
-  BookIcon,
-  BranchIcon,
-  CommitIcon,
-  DiffIcon,
-  FileIcon,
-  ListIcon,
-  PencilIcon,
-  PlayIcon,
-  RocketIcon,
-  SearchIcon,
-  TerminalIcon,
-  WrenchIcon,
-} from './icons'
+import { toolLook } from '../data/toolIcons'
+import type { ToolIconType } from '../data/toolIcons'
 
 const STATUS_LABEL = 'Not running'
 
 /** Placeholder — no real toolkit data source yet; see the "Not yet wired"
- *  note in ../../CLAUDE.md once a toolkit modal/data shape exists. */
-const TOOLKIT_TOOLS = [
-  'Create PR',
-  'Run Tests',
-  'Read File',
-  'Edit File',
-  'Search Codebase',
-  'Run Shell Command',
-  'Git Commit',
-  'View Diff',
-  'Lint Code',
-  'Deploy Preview',
-  'Fetch Docs',
+ *  note in ../../CLAUDE.md once a toolkit modal/data shape exists. One entry
+ *  per entry in ../data/toolIcons.ts's vocabulary, so every icon (including
+ *  the `wrench` fallback) has a visible tile to inspect. */
+const TOOLKIT_TOOLS: { name: string; icon: ToolIconType }[] = [
+  { name: 'Branch', icon: 'branch' },
+  { name: 'Commit', icon: 'commit' },
+  { name: 'Diff', icon: 'diff' },
+  { name: 'Terminal', icon: 'terminal' },
+  { name: 'Search', icon: 'search' },
+  { name: 'File', icon: 'file' },
+  { name: 'Edit', icon: 'edit' },
+  { name: 'Play', icon: 'play' },
+  { name: 'Book', icon: 'book' },
+  { name: 'List', icon: 'list' },
+  { name: 'Move', icon: 'move' },
+  { name: 'Push', icon: 'push' },
+  { name: 'Board', icon: 'board' },
+  { name: 'Wrench', icon: 'wrench' },
 ]
-
-type ToolLook = { Icon: ComponentType<{ className?: string }>; tint: string }
-
-/** How a capability tile is drawn. A tool with no entry falls back to
- *  `DEFAULT_TOOL_LOOK`, so the toolkit survives one being added or renamed.
- *  Tints are existing theme tokens only — see :root in ../styles.css. */
-const TOOL_LOOKS: Record<string, ToolLook> = {
-  'Create PR': { Icon: BranchIcon, tint: 'var(--workflow)' },
-  'Run Tests': { Icon: PlayIcon, tint: 'var(--syntax-string)' },
-  'Read File': { Icon: FileIcon, tint: 'var(--syntax-key)' },
-  'Edit File': { Icon: PencilIcon, tint: 'var(--agent)' },
-  'Search Codebase': { Icon: SearchIcon, tint: 'var(--syntax-boolean)' },
-  'Run Shell Command': { Icon: TerminalIcon, tint: 'var(--syntax-string)' },
-  'Git Commit': { Icon: CommitIcon, tint: 'var(--danger)' },
-  'View Diff': { Icon: DiffIcon, tint: 'var(--workflow)' },
-  'Lint Code': { Icon: ListIcon, tint: 'var(--syntax-boolean)' },
-  'Deploy Preview': { Icon: RocketIcon, tint: 'var(--syntax-boolean)' },
-  'Fetch Docs': { Icon: BookIcon, tint: 'var(--accent-hover)' },
-}
-
-const DEFAULT_TOOL_LOOK: ToolLook = { Icon: WrenchIcon, tint: 'var(--icon)' }
 
 /** Neither option does anything yet — see the "Not yet wired" note in
  *  ../../CLAUDE.md; this only shapes the entry point into two choices.
@@ -405,16 +377,16 @@ function ToolkitCard() {
       </div>
 
       <div className="agent-view__toolkit-grid">
-        {TOOLKIT_TOOLS.map((tool) => {
-          const { Icon, tint } = TOOL_LOOKS[tool] ?? DEFAULT_TOOL_LOOK
+        {TOOLKIT_TOOLS.map(({ name, icon }) => {
+          const { Icon, tint } = toolLook(icon)
           return (
             <div
               className="agent-view__tool"
-              key={tool}
+              key={name}
               style={{ '--tool-tint': tint } as CSSProperties}
             >
               <Icon className="agent-view__tool-icon" />
-              <span className="agent-view__tool-name">{tool}</span>
+              <span className="agent-view__tool-name">{name}</span>
             </div>
           )
         })}

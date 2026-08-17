@@ -130,12 +130,12 @@ export function ArchiveIcon({ className }: IconProps) {
 
 /* ---- capability icons, for an agent's toolkit ----
    `WrenchIcon` is the fallback for a tool nothing else matches; see
-   TOOL_ICONS in AgentView.tsx. */
+   TOOL_ICON_LOOKS in ../data/toolIcons.ts. */
 
 export function WrenchIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M15.5 3.5a5.5 5.5 0 0 0-6.9 6.9L3.7 15.3a2 2 0 0 0 0 2.8l2.2 2.2a2 2 0 0 0 2.8 0l4.9-4.9a5.5 5.5 0 0 0 6.9-6.9L17.4 6.6h-3v-3z" />
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.77 3.77z" />
     </svg>
   )
 }
@@ -220,22 +220,26 @@ export function ListIcon({ className }: IconProps) {
   )
 }
 
-export function RocketIcon({ className }: IconProps) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M13 4c3.5 1 6 4.5 6 9l-3.5 3.5h-7L5 13c0-4.5 2.5-8 6-9z" />
-      <circle cx="12" cy="10" r="1.8" />
-      <path d="M8.5 17L6 20.5" />
-      <path d="M15.5 17L18 20.5" />
-    </svg>
-  )
-}
-
 export function BookIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 5a1 1 0 0 1 1-1h4.5A2.5 2.5 0 0 1 12 6.5V20a2 2 0 0 0-2-2H4z" />
       <path d="M20 5a1 1 0 0 0-1-1h-4.5A2.5 2.5 0 0 0 12 6.5V20a2 2 0 0 1 2-2h6z" />
+    </svg>
+  )
+}
+
+export function BoardIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+      <path d="M9 4v16" />
+      <path d="M15 4v16" />
+      <path d="M4.5 9h3" />
+      <path d="M4.5 13h3" />
+      <path d="M10.5 8h3" />
+      <path d="M10.5 12h3" />
+      <path d="M16.5 8h3" />
     </svg>
   )
 }
