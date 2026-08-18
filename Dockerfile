@@ -14,8 +14,10 @@ FROM node:22-alpine AS api
 
 WORKDIR /app
 COPY server/ ./server/
+COPY common-tools/ ./common-tools/
 
 ENV PROJECTS_ROOT=/resources/projects
+ENV COMMON_TOOLS_ROOT=/app/common-tools
 EXPOSE 20445
 CMD ["node", "server/index.mjs"]
 

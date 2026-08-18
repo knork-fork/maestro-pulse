@@ -1,0 +1,4 @@
+# A tool's real credentials/overrides. Each tools/<tool>/.env is committed
+# with placeholders (or, where nothing is a secret, a working default); the
+# .env.local beside it holds any real override and stays local.
+.env.local

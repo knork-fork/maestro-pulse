@@ -64,8 +64,9 @@ dependency-free Node API that owns the folder tree.
 | An agent's data shape, numeric bounds/defaults, and the shared `agent.json` parser | [src/data/agent.ts](src/data/agent.ts) |
 | The shared toolkit icon-type vocabulary — the classified set a Toolkit tile (and a tool's own `tool.json`) picks an icon from | [src/data/toolIcons.ts](src/data/toolIcons.ts) |
 | A tool's own shape (`tool.json`: name/description/icon) and its parser | [src/data/tool.ts](src/data/tool.ts) |
-| A project's tool catalog — reads its `tools/` folder off the already-loaded tree and each entry's `tool.json`, for both the Toolkit card and its edit modal | [src/hooks/useProjectTools.ts](src/hooks/useProjectTools.ts) |
-| The Toolkit card's Edit modal — two-list tool picker (selected vs. available, with a filter), saved back through `agent.json`'s `tools` | [src/components/AgentToolsModal.tsx](src/components/AgentToolsModal.tsx) |
+| A project's tool catalog — reads its `tools/` folder off the already-loaded tree and each entry's `tool.json`, for both the Toolkit card and its edit modal; also exports `useCommonTools`, the always-on catalog read from the shared `common-tools/` folder via its own endpoint | [src/hooks/useProjectTools.ts](src/hooks/useProjectTools.ts) |
+| The Toolkit card's Edit modal — two-list tool picker (selected vs. available, with a filter), saved back through `agent.json`'s `tools`; the common catalog heads "Selected", locked | [src/components/AgentToolsModal.tsx](src/components/AgentToolsModal.tsx) |
+| The read-only toolkit tile shared by the Toolkit card and its edit modal | [src/components/ToolTile.tsx](src/components/ToolTile.tsx) |
 | The slider/label controls shared by an agent's view and its dialog | [src/components/AgentFields.tsx](src/components/AgentFields.tsx) |
 | An agent view's own `agent.json` — fetch, quiet reload driven by the tree, and the debounced per-slider save | [src/hooks/useAgentProfile.ts](src/hooks/useAgentProfile.ts) |
 | An agent's own `agent.md` — fetch, quiet reload driven by the tree, and `save` for the view's own Edit button | [src/hooks/useAgentInstructions.ts](src/hooks/useAgentInstructions.ts) |
@@ -83,7 +84,8 @@ dependency-free Node API that owns the folder tree.
 | Keeping the project store out of git | [resources/.gitignore](resources/.gitignore) |
 | Build tooling + dependencies | [package.json](package.json), [vite.config.ts](vite.config.ts), [tsconfig.json](tsconfig.json) |
 | CI check (typecheck) | [scripts/ci.sh](scripts/ci.sh) |
-| Three-stage image (SPA build → api → nginx serve) | [Dockerfile](Dockerfile) |
+| Three-stage image (SPA build → api → nginx serve); also bakes in `common-tools/` | [Dockerfile](Dockerfile) |
+| Tools available to every project by default — baked into the api image, not part of the user's own (gitignored) project store, so a fresh install has them; served by `GET /api/common-tools` | [common-tools/](common-tools/) |
 | nginx server, listen port, the API proxy, and the skills proxy | [nginx.conf](nginx.conf) |
 | The add-to-backlog skill template, filled in per-request and handed to an external Claude Code session | [server/add-to-backlog-template.md](server/add-to-backlog-template.md) |
 | Both services, host port, and the store's bind mount | [docker-compose.yml](docker-compose.yml) |
@@ -117,6 +119,13 @@ in [docker-compose.yml](docker-compose.yml).
 
 The store is deliberately untracked ([resources/.gitignore](resources/.gitignore)):
 it holds whatever the user creates or drops in.
+
+`GET /api/common-tools` is a second, separate read path, outside `ROOT`
+entirely: it lists [common-tools/](common-tools/), a tracked folder baked
+into the api image at build time (see the Dockerfile), not bind-mounted. It
+exists so a tool available to *every* project by default ships with the app
+itself rather than living in the user's own gitignored store — see the
+data-shape section below for how the frontend renders it.
 
 ### Frontend state
 
@@ -263,6 +272,14 @@ carries `tools` through unedited rather than dropping it. This is a third
 independent write path into `agent.json`, alongside the view's sliders and
 the Profile dialog, the same dual/triple-path shape `agent.md` and
 `workflow.json` already have elsewhere in this file.
+
+Every tool in [common-tools/](common-tools/) — read via `useCommonTools` in
+the same [useProjectTools.ts](src/hooks/useProjectTools.ts) — heads both the
+Toolkit card and `AgentToolsModal`'s "Selected" grid unconditionally,
+rendered locked ([ToolTile.tsx](src/components/ToolTile.tsx), the tile
+shared by both). It is never read from or written to `agent.json`'s `tools`:
+availability to every agent is the folder's existence, not a per-agent
+selection, so nothing about it can drift out of sync between agents.
 
 ## Data shape
 
@@ -443,6 +460,25 @@ list above is (see `useProjectTools.ts`). `icon` names a key from
 the literal string `"null"` all mean "no icon" (rendered as reserved empty
 space) rather than falling back to that vocabulary's own wrench default,
 which is reserved for an unrecognized (as opposed to absent) icon key.
+
+[common-tools/](common-tools/) follows the identical four-file convention one
+level shallower — `common-tools/<tool>/` instead of a project's
+`<project>/tools/<tool>/` — since it isn't scoped to any project.
+`GET /api/common-tools` (`getCommonTools` in
+[server/index.mjs](server/index.mjs)) reads it directly (no tree/`ROOT`
+involvement, since it lives outside `resources/projects` entirely) and
+returns the same `{path, title, description, icon}` shape `useProjectTools.ts`
+builds for a project's own catalog, so both render through the same
+`ToolCatalogEntry` type and the same tile component.
+
+A card's own `column` can be set to any column, not just an adjacent one, via
+the `move-to` action on `PATCH /api/workflow-cards` — the one card action the
+UI itself never sends. Every other action (`move-up`/`move-down`/
+`move-right`/`delete`/`archive`) is validated against the card's current
+column position and a bot column's lock; `move-to` skips all of that and only
+checks the named column exists, since it exists for a tool/agent driving the
+board directly (see `common-tools/move-maestro-pulse-card/`) rather than a
+person clicking through it.
 
 A file's contents cross the wire as text wrapped in JSON, because the API has no
 non-JSON response path. The read is capped and refuses anything that is not a

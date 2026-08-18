@@ -967,6 +967,25 @@ body {
   font-size: 13.5px;
 }
 
+/* A tool from the always-on common catalog — see useCommonTools. Same tile,
+   just a hairline dashed border and no hover affordance, since it can't be
+   clicked/toggled anywhere it appears. */
+.agent-view__tool--locked {
+  border-style: dashed;
+}
+
+.agent-view__tool-lock {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* ---- tools picker (AgentToolsModal) ---- */
 
 .tools-picker {

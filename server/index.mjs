@@ -19,6 +19,16 @@ const PORT = Number(process.env.PORT ?? 20445)
 const ROOT = path.resolve(process.env.PROJECTS_ROOT ?? '/resources/projects')
 
 /**
+ * Tools available to every project by default — baked into the image (see
+ * the Dockerfile's `api` stage), not part of the user's own project store, so
+ * a fresh install has them without anything being dropped into `resources/`.
+ * Read-only from this server's point of view: nothing ever writes here.
+ */
+const COMMON_TOOLS_ROOT = path.resolve(
+  process.env.COMMON_TOOLS_ROOT ?? path.join(fileURLToPath(import.meta.url), '../../common-tools'),
+)
+
+/**
  * A directory's kind is not something the filesystem records, so the app writes
  * it into the directory itself. Living inside the directory (rather than in one
  * manifest at the root) means a rename or a move by hand carries it along.
@@ -54,9 +64,13 @@ const MAX_COLUMN_NAME_LENGTH = 60
  * A card's own actions, applied one at a time by `PATCH /api/workflow-cards`.
  * None of them grow `cards` — move/delete/archive only reorder, relabel,
  * shrink, or transfer to `archived` — so unlike columns there is no length
- * cap to enforce here.
+ * cap to enforce here. `move-to` is the one action the UI never sends: it
+ * names an arbitrary destination column and skips every restriction the
+ * other moves enforce (adjacency, bot-column lock, Backlog/Done position) —
+ * meant for a tool/agent driving the board directly, not a person clicking
+ * through it.
  */
-const CARD_ACTIONS = ['move-up', 'move-down', 'move-right', 'delete', 'archive']
+const CARD_ACTIONS = ['move-up', 'move-down', 'move-right', 'move-to', 'delete', 'archive']
 
 /** What a new agent is given — a single file, same as a workflow, with no
  *  fields that need server-side assembly. */
@@ -152,6 +166,7 @@ class HttpError extends Error {
 const routes = {
   'GET /api/tree': getTree,
   'GET /api/file': getFile,
+  'GET /api/common-tools': getCommonTools,
   'POST /api/entries': createEntry,
   'PUT /api/entries': updateEntry,
   'PATCH /api/entry': renameEntry,
@@ -185,6 +200,39 @@ async function getFile(_req, url) {
 
   const content = await guardFs(() => readFile(abs, 'utf8'), `No such file: ${target}`)
   return { status: 200, body: { path: target, content } }
+}
+
+/**
+ * The catalog of tools available to every project by default — one entry
+ * per subfolder of COMMON_TOOLS_ROOT that has a `tool.json`. Unlike a
+ * project's own `tools/` folder (read client-side off the already-loaded
+ * tree, since it lives under ROOT), this folder is outside ROOT entirely, so
+ * it needs its own small read here instead. A missing/malformed `tool.json`
+ * falls back to the folder's own name, same tolerance `useProjectTools.ts`
+ * has for a project tool.
+ */
+async function getCommonTools() {
+  const entries = await readdir(COMMON_TOOLS_ROOT, { withFileTypes: true }).catch(() => [])
+  const folders = entries.filter((entry) => entry.isDirectory())
+
+  const tools = await Promise.all(
+    folders.map(async (folder) => {
+      try {
+        const raw = await readFile(path.join(COMMON_TOOLS_ROOT, folder.name, 'tool.json'), 'utf8')
+        const parsed = JSON.parse(raw)
+        return {
+          path: folder.name,
+          title: typeof parsed.title === 'string' && parsed.title ? parsed.title : folder.name,
+          description: typeof parsed.description === 'string' ? parsed.description : '',
+          icon: typeof parsed.icon === 'string' && parsed.icon && parsed.icon !== 'null' ? parsed.icon : null,
+        }
+      } catch {
+        return { path: folder.name, title: folder.name, description: '', icon: null }
+      }
+    }),
+  )
+
+  return { status: 200, body: { tools } }
 }
 
 /**
@@ -359,10 +407,11 @@ async function updateWorkflowCard(req) {
 
   const cardId = validCardId(body.cardId)
   const action = validCardAction(body.action)
+  const targetColumn = action === 'move-to' ? requiredText(body.column, 'column') : undefined
 
   await guardFs(async () => {
     const data = await readWorkflowJson(abs)
-    const updated = applyCardAction(data, cardId, action)
+    const updated = applyCardAction(data, cardId, action, targetColumn)
     await writeFile(path.join(abs, WORKFLOW_FILE), `${JSON.stringify(updated, null, 2)}\n`)
   }, `No such workflow: ${target}`)
 
@@ -673,7 +722,7 @@ const isBotColumn = (column) => column?.bot === true
  * found by position (Backlog is index 0, Done is the last index), the same
  * rule scaffoldWorkflow's assembly and validColumn already rely on.
  */
-function applyCardAction(data, cardId, action) {
+function applyCardAction(data, cardId, action, targetColumnName) {
   const { columns, cards } = data
   const index = cards.findIndex((card) => card.id === cardId)
   if (index === -1) throw new HttpError(404, `No such card: ${cardId}`)
@@ -694,6 +743,12 @@ function applyCardAction(data, cardId, action) {
       return { ...data, cards: swapWithNeighbor(cards, index, 'down', card.column) }
     case 'move-right':
       return { ...data, cards: moveRight(cards, index, columns, columnIdx) }
+    case 'move-to': {
+      const target = columns.find((column) => column.name === targetColumnName)
+      if (!target) throw new HttpError(400, `No such column: ${targetColumnName}`)
+      const moved = { ...card, column: target.name, last_activity: `moved to ${target.name} by tool` }
+      return { ...data, cards: cards.map((c, i) => (i === index ? moved : c)) }
+    }
     case 'delete':
       if (columnIdx !== 0) throw new HttpError(400, 'Only a Backlog card can be deleted')
       return { ...data, cards: cards.filter((_, i) => i !== index) }

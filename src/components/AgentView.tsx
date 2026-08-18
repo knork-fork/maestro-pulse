@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
 import {
   HANDHOLDING_DESCRIPTIONS,
   HANDHOLDING_MAX,
@@ -32,11 +31,10 @@ import { agentAvatar } from './avatar'
 import { Menu, anchorFromRect } from './Menu'
 import type { MenuAnchor, MenuItem } from './Menu'
 import { SafeMarkdown } from '../views/MarkdownView'
-import { toolLook } from '../data/toolIcons'
-import { toolTooltip } from '../data/tool'
 import type { ToolCatalogEntry } from '../hooks/useProjectTools'
-import { useProjectTools } from '../hooks/useProjectTools'
+import { useCommonTools, useProjectTools } from '../hooks/useProjectTools'
 import { AgentToolsModal } from './AgentToolsModal'
+import { ToolTile } from './ToolTile'
 
 const STATUS_LABEL = 'Not running'
 
@@ -88,6 +86,7 @@ export function AgentView({ path, name, node, treeVersion, onSave }: Props) {
   const { data, error, loading, reload, update } = useAgentProfile(path)
   const instructions = useAgentInstructions(path)
   const { tools: catalog } = useProjectTools(treeVersion, path)
+  const { tools: commonTools } = useCommonTools(treeVersion)
   const [editingInstructions, setEditingInstructions] = useState(false)
   const [editingProfile, setEditingProfile] = useState(false)
   const [editingTools, setEditingTools] = useState(false)
@@ -167,12 +166,18 @@ export function AgentView({ path, name, node, treeVersion, onSave }: Props) {
         error={instructions.error}
         onEdit={() => setEditingInstructions(true)}
       />
-      <ToolkitCard tools={data.tools} catalog={catalog} onEdit={() => setEditingTools(true)} />
+      <ToolkitCard
+        tools={data.tools}
+        catalog={catalog}
+        commonTools={commonTools}
+        onEdit={() => setEditingTools(true)}
+      />
       <StatsCard />
 
       {editingTools && (
         <AgentToolsModal
           catalog={catalog}
+          commonTools={commonTools}
           selected={data.tools}
           onSave={async (tools) => {
             await onSave(path, { ...data, tools })
@@ -363,20 +368,28 @@ function InstructionsCard({
   )
 }
 
-/** An agent's toolkit: `agent.json`'s own `tools` (project-relative paths),
- *  resolved against the project's tool catalog for a title/icon — see
- *  `useProjectTools`. A path with no matching catalog entry (the tool was
- *  deleted from disk after being picked) still shows, using the raw path as
- *  its title. Edit opens `AgentToolsModal`. */
+/** An agent's toolkit: `commonTools` (every tool in the shared, always-on
+ *  catalog — see `useCommonTools`) shown first, unconditionally, followed by
+ *  `agent.json`'s own `tools` (project-relative paths) resolved against the
+ *  project's own catalog for a title/icon — see `useProjectTools`. A path
+ *  with no matching catalog entry (the tool was deleted from disk after
+ *  being picked) still shows, using the raw path as its title. Edit opens
+ *  `AgentToolsModal`. */
 function ToolkitCard({
   tools,
   catalog,
+  commonTools,
   onEdit,
 }: {
   tools: string[]
   catalog: ToolCatalogEntry[]
+  commonTools: ToolCatalogEntry[]
   onEdit: () => void
 }) {
+  const own = tools.map(
+    (path) => catalog.find((entry) => entry.path === path) ?? { path, title: path, description: '', icon: null },
+  )
+
   return (
     <div className="agent-view__card">
       <div className="agent-view__card-header">
@@ -386,34 +399,16 @@ function ToolkitCard({
         </button>
       </div>
 
-      {tools.length === 0 ? (
+      {commonTools.length === 0 && own.length === 0 ? (
         <p className="empty-state">No tools</p>
       ) : (
         <div className="agent-view__toolkit-grid">
-          {tools.map((path) => {
-            const tool = catalog.find((entry) => entry.path === path) ?? {
-              path,
-              title: path,
-              description: '',
-              icon: null,
-            }
-            const { Icon, tint } = toolLook(tool.icon)
-            return (
-              <div
-                className="agent-view__tool"
-                key={path}
-                title={toolTooltip(tool)}
-                style={{ '--tool-tint': tint } as CSSProperties}
-              >
-                {tool.icon === null ? (
-                  <span className="agent-view__tool-icon" />
-                ) : (
-                  <Icon className="agent-view__tool-icon" />
-                )}
-                <span className="agent-view__tool-name">{tool.title}</span>
-              </div>
-            )
-          })}
+          {commonTools.map((tool) => (
+            <ToolTile key={tool.path} tool={tool} locked />
+          ))}
+          {own.map((tool) => (
+            <ToolTile key={tool.path} tool={tool} />
+          ))}
         </div>
       )}
     </div>

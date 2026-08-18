@@ -73,6 +73,14 @@ export type AgentEdits = {
 export const fetchTree = () =>
   request<{ nodes: TreeNode[] }>('GET', '/tree').then((body) => body.nodes)
 
+/** The tools available to every project by default — baked into the image,
+ *  not part of the user's own project store; see COMMON_TOOLS_ROOT in
+ *  server/index.mjs. */
+export type CommonTool = { path: string; title: string; description: string; icon: string | null }
+
+export const fetchCommonTools = () =>
+  request<{ tools: CommonTool[] }>('GET', '/common-tools').then((body) => body.tools)
+
 /** One file's text. Rejects if it is missing, not a file, or too large to show. */
 export const fetchFile = (path: string) =>
   request<{ path: string; content: string }>(

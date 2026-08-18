@@ -1,0 +1,5 @@
+{
+  "title": "Move Maestro Pulse Card",
+  "description": "Move a card to any column on a maestro-pulse workflow board.",
+  "icon": "move"
+}

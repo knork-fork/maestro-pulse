@@ -71,3 +71,39 @@ export function useProjectTools(nodes: TreeNode[], agentPath: string) {
 
   return { tools, loading }
 }
+
+/**
+ * The catalog of tools available to every project by default — read from a
+ * dedicated endpoint rather than the tree, since these live outside
+ * `resources/projects` entirely (see COMMON_TOOLS_ROOT in
+ * `server/index.mjs`). Always rendered forced-on wherever an agent's own
+ * `catalog` (above) is rendered — never selected/deselected, never stored in
+ * `agent.json`'s `tools`. `nodes` is only a reload trigger (e.g. the
+ * sidebar's refresh button), the same role it plays for `useProjectTools`.
+ */
+export function useCommonTools(nodes: TreeNode[]) {
+  const [tools, setTools] = useState<ToolCatalogEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+
+    api
+      .fetchCommonTools()
+      .then((entries) => {
+        if (!cancelled) setTools(entries)
+      })
+      .catch(() => {
+        if (!cancelled) setTools([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [nodes])
+
+  return { tools, loading }
+}

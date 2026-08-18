@@ -6,9 +6,13 @@ import { toolLook } from '../data/toolIcons'
 import { toolTooltip } from '../data/tool'
 import { ArrowDownIcon, ArrowUpIcon } from './icons'
 import { Modal } from './Modal'
+import { ToolTile } from './ToolTile'
 
 type Props = {
   catalog: ToolCatalogEntry[]
+  /** Every tool in the shared, always-on catalog (see `useCommonTools`) —
+   *  rendered first in "Selected", locked, never part of `chosen`/`onSave`. */
+  commonTools: ToolCatalogEntry[]
   selected: string[]
   onSave: (tools: string[]) => Promise<void>
   onCancel: () => void
@@ -26,9 +30,12 @@ function resolve(path: string, catalog: ToolCatalogEntry[]): ToolCatalogEntry {
  * a lower, searchable grid of everything else in the project's `tools/`
  * folder — the same tile look as the Toolkit card itself. Clicking any tile
  * moves it to the other grid; nothing is persisted until Save. See
- * `useProjectTools` for how `catalog` is built.
+ * `useProjectTools` for how `catalog` is built. `commonTools` (see
+ * `useCommonTools`) always heads the "Selected" grid, locked — it is never
+ * part of `chosen`, so it can't be toggled and is never written into
+ * `onSave`'s `tools`.
  */
-export function AgentToolsModal({ catalog, selected, onSave, onCancel }: Props) {
+export function AgentToolsModal({ catalog, commonTools, selected, onSave, onCancel }: Props) {
   const [chosen, setChosen] = useState(selected)
   const [query, setQuery] = useState('')
   const { pending, error, run } = useAsyncAction()
@@ -49,12 +56,15 @@ export function AgentToolsModal({ catalog, selected, onSave, onCancel }: Props) 
           <div className="tools-picker__section-header">
             <h3 className="tools-picker__section-title">Selected</h3>
           </div>
-          {chosenTools.length === 0 ? (
+          {commonTools.length === 0 && chosenTools.length === 0 ? (
             <p className="empty-state">No tools selected</p>
           ) : (
             <div className="tools-picker__grid">
+              {commonTools.map((tool) => (
+                <ToolTile key={tool.path} tool={tool} locked />
+              ))}
               {chosenTools.map((tool) => (
-                <ToolTile key={tool.path} tool={tool} arrow="down" onClick={() => deselect(tool.path)} />
+                <SelectableToolTile key={tool.path} tool={tool} arrow="down" onClick={() => deselect(tool.path)} />
               ))}
             </div>
           )}
@@ -77,7 +87,7 @@ export function AgentToolsModal({ catalog, selected, onSave, onCancel }: Props) 
           ) : (
             <div className="tools-picker__grid">
               {available.map((tool) => (
-                <ToolTile key={tool.path} tool={tool} arrow="up" onClick={() => select(tool.path)} />
+                <SelectableToolTile key={tool.path} tool={tool} arrow="up" onClick={() => select(tool.path)} />
               ))}
             </div>
           )}
@@ -103,7 +113,9 @@ export function AgentToolsModal({ catalog, selected, onSave, onCancel }: Props) 
   )
 }
 
-function ToolTile({
+/** The interactive counterpart to the shared, read-only `ToolTile` — a
+ *  project tool that can be toggled between "Selected" and "Available". */
+function SelectableToolTile({
   tool,
   arrow,
   onClick,
