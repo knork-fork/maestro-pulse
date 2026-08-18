@@ -59,6 +59,9 @@ export function CardDetailModal({ card, onCancel }: Props) {
       </div>
 
       <div className="modal__actions">
+        <button type="button" className="btn" disabled>
+          Run manually
+        </button>
         <button type="button" className="btn" onClick={onCancel}>
           Close
         </button>
