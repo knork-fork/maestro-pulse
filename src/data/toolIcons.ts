@@ -7,12 +7,17 @@ import {
   CommitIcon,
   DiffIcon,
   FileIcon,
+  GitLabIcon,
+  GoogleDriveIcon,
+  JiraIcon,
   ListIcon,
   MoveIcon,
+  OutlineIcon,
   PencilIcon,
   PlayIcon,
   SearchIcon,
   TerminalIcon,
+  TrelloIcon,
   WrenchIcon,
 } from '../components/icons'
 
@@ -33,6 +38,11 @@ export type ToolIconType =
   | 'move'
   | 'push'
   | 'board'
+  | 'trello'
+  | 'google'
+  | 'outline'
+  | 'gitlab'
+  | 'jira'
   | 'wrench'
 
 export type ToolLook = { Icon: ComponentType<{ className?: string }>; tint: string }
@@ -52,6 +62,11 @@ export const TOOL_ICON_LOOKS: Record<ToolIconType, ToolLook> = {
   move: { Icon: MoveIcon, tint: 'var(--workflow)' },
   push: { Icon: ArrowUpIcon, tint: 'var(--syntax-string)' },
   board: { Icon: BoardIcon, tint: 'var(--accent-hover)' },
+  trello: { Icon: TrelloIcon, tint: 'var(--accent)' },
+  google: { Icon: GoogleDriveIcon, tint: 'var(--accent)' },
+  outline: { Icon: OutlineIcon, tint: 'var(--icon)' },
+  gitlab: { Icon: GitLabIcon, tint: 'var(--danger)' },
+  jira: { Icon: JiraIcon, tint: 'var(--accent)' },
   wrench: { Icon: WrenchIcon, tint: 'var(--icon)' },
 }
 

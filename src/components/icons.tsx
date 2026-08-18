@@ -244,6 +244,130 @@ export function BoardIcon({ className }: IconProps) {
   )
 }
 
+/** Unlike every other tool icon, this one renders Trello's actual brand
+ *  colors rather than `currentColor`/`--tool-tint` — inline `style` on each
+ *  shape wins over the shared `.agent-view__tool-icon` rule (fill: none;
+ *  stroke: var(--tool-tint)) that every other icon in this vocabulary relies
+ *  on for its outline look. */
+export function TrelloIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="21" height="21" rx="4.5" style={{ fill: '#0079bf', stroke: 'none' }} />
+      <rect x="4.7" y="4.5" width="6" height="14" rx="1.4" style={{ fill: '#fff', stroke: 'none' }} />
+      <rect x="13.3" y="4.5" width="6" height="9" rx="1.4" style={{ fill: '#fff', stroke: 'none' }} />
+    </svg>
+  )
+}
+
+/** Same brand-colors-over-outline exception as `TrelloIcon` above. */
+export function GoogleDriveIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 87.3 78" aria-hidden="true">
+      <path
+        d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"
+        style={{ fill: '#0066da', stroke: 'none' }}
+      />
+      <path
+        d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"
+        style={{ fill: '#00ac47', stroke: 'none' }}
+      />
+      <path
+        d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"
+        style={{ fill: '#ea4335', stroke: 'none' }}
+      />
+      <path
+        d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"
+        style={{ fill: '#00832d', stroke: 'none' }}
+      />
+      <path
+        d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"
+        style={{ fill: '#2684fc', stroke: 'none' }}
+      />
+      <path
+        d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"
+        style={{ fill: '#ffba00', stroke: 'none' }}
+      />
+    </svg>
+  )
+}
+
+/** Same brand-colors-over-outline exception as `TrelloIcon`/`GoogleDriveIcon`
+ *  above — inline `style` on each shape wins over the shared
+ *  `.agent-view__tool-icon` rule. */
+export function OutlineIcon({ className }: IconProps) {
+  const sheet = { fill: '#fff', stroke: '#000', strokeWidth: 25, strokeLinejoin: 'round' as const, strokeLinecap: 'round' as const }
+  return (
+    <svg className={className} viewBox="0 0 448 456" aria-hidden="true">
+      <path d="M299 107 L338 98 Q352 95 352 109 L352 340 Q352 352 339 350 L299 343 Z" style={sheet} />
+      <path d="M248 76 L282 65 Q300 59 300 77 L300 369 Q300 388 282 382 L248 372 Z" style={sheet} />
+      <path
+        d="M73 126 L229 36 Q248 25 248 45 L248 402 Q248 420 232 411 L72 320 Q66 317 66 309 L66 137 Q66 130 73 126 Z"
+        style={sheet}
+      />
+      <path d="M106 153 L131 140 L131 277 L106 263 Z" style={{ fill: '#000', stroke: 'none' }} />
+    </svg>
+  )
+}
+
+/** Same brand-colors-over-outline exception as `TrelloIcon`/`GoogleDriveIcon`
+ *  above. */
+export function GitLabIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 710 690" aria-hidden="true">
+      <path
+        d="M45 274 122.5 37.5C124.9 30.1 129.4 26 136 26s11.1 4.1 13.5 11.5L227 274Z"
+        style={{ fill: '#e24329', stroke: 'none' }}
+      />
+      <path
+        d="M484 274 561.5 37.5C563.9 30.1 568.4 26 575 26s11.1 4.1 13.5 11.5L666 274Z"
+        style={{ fill: '#e24329', stroke: 'none' }}
+      />
+      <path d="M227 274h257L355.5 670Z" style={{ fill: '#e24329', stroke: 'none' }} />
+      <path d="M45 274h182l128.5 396Z" style={{ fill: '#fc6d26', stroke: 'none' }} />
+      <path d="M484 274h182L355.5 670Z" style={{ fill: '#fc6d26', stroke: 'none' }} />
+      <path
+        d="M45 274 5.8 394.1c-3.5 10.7.3 22.4 9.3 28.9L355.5 670Z"
+        style={{ fill: '#fca326', stroke: 'none' }}
+      />
+      <path
+        d="M666 274 705.2 394.1c3.5 10.7-.3 22.4-9.3 28.9L355.5 670Z"
+        style={{ fill: '#fca326', stroke: 'none' }}
+      />
+    </svg>
+  )
+}
+
+/** Same brand-colors-over-outline exception as `TrelloIcon`/`GoogleDriveIcon`
+ *  above. */
+export function JiraIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 752 715" aria-hidden="true">
+      <defs>
+        <linearGradient id="jira-middle" gradientUnits="userSpaceOnUse" x1="300" y1="249" x2="405" y2="131">
+          <stop offset="0" stopColor="#2684FF" />
+          <stop offset="1" stopColor="#0052CC" />
+        </linearGradient>
+        <linearGradient id="jira-bottom" gradientUnits="userSpaceOnUse" x1="140" y1="409" x2="245" y2="291">
+          <stop offset="0" stopColor="#2684FF" />
+          <stop offset="1" stopColor="#0052CC" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M339 28H662A27 27 0 0 1 689 55V376C609.5 376 545 311.5 545 232V174H486C404.8 174 339 108.2 339 28Z"
+        style={{ fill: '#2684FF', stroke: 'none' }}
+      />
+      <path
+        d="M180 189H503A27 27 0 0 1 530 216V537C450.5 537 385 472.5 385 393V335H326C244.8 335 180 270.2 180 189Z"
+        style={{ fill: 'url(#jira-middle)', stroke: 'none' }}
+      />
+      <path
+        d="M20 349H343A27 27 0 0 1 370 376V697C290.5 697 225 632.5 225 553V496H166C84.8 496 20 430.2 20 349Z"
+        style={{ fill: 'url(#jira-bottom)', stroke: 'none' }}
+      />
+    </svg>
+  )
+}
+
 /** Marks a toolkit tile from the common, always-on catalog — see ToolTile.tsx. */
 export function LockIcon({ className }: IconProps) {
   return (
