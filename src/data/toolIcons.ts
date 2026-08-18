@@ -6,6 +6,7 @@ import {
   BranchIcon,
   CommitIcon,
   DiffIcon,
+  DiscordIcon,
   FileIcon,
   GitLabIcon,
   GoogleDriveIcon,
@@ -43,6 +44,7 @@ export type ToolIconType =
   | 'outline'
   | 'gitlab'
   | 'jira'
+  | 'discord'
   | 'wrench'
 
 export type ToolLook = { Icon: ComponentType<{ className?: string }>; tint: string }
@@ -67,6 +69,7 @@ export const TOOL_ICON_LOOKS: Record<ToolIconType, ToolLook> = {
   outline: { Icon: OutlineIcon, tint: 'var(--icon)' },
   gitlab: { Icon: GitLabIcon, tint: 'var(--danger)' },
   jira: { Icon: JiraIcon, tint: 'var(--accent)' },
+  discord: { Icon: DiscordIcon, tint: 'var(--accent)' },
   wrench: { Icon: WrenchIcon, tint: 'var(--icon)' },
 }
 

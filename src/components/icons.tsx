@@ -368,6 +368,27 @@ export function JiraIcon({ className }: IconProps) {
   )
 }
 
+/** Same brand-colors-over-outline exception as `TrelloIcon`/`GoogleDriveIcon`
+ *  above. The source badge's own white canvas rect is dropped — the tile
+ *  already supplies a background, so only the blue circle + mark render. */
+export function DiscordIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 1040 927" aria-hidden="true">
+      <circle cx="489" cy="463" r="454" style={{ fill: '#5865f2', stroke: 'none' }} />
+      <path
+        d="M286 279C250 339 219 404 205 470C196 513 195 565 200 612C242 645 293 671 347 688L379 636C362 630 345 622 330 613L341 602C383 624 435 636 489 636C543 636 595 624 637 602L649 613C634 622 617 630 600 636L631 688C685 671 736 645 779 612C784 566 782 514 774 470C760 404 729 339 692 279C654 262 613 251 571 243L556 274C534 271 512 269 489 269C466 269 444 271 423 274L407 243C365 251 324 262 286 279Z"
+        style={{ fill: '#ffffff', stroke: 'none' }}
+      />
+      <circle cx="392" cy="486" r="53" style={{ fill: '#5865f2', stroke: 'none' }} />
+      <circle cx="586" cy="486" r="53" style={{ fill: '#5865f2', stroke: 'none' }} />
+      <path
+        d="M336 607C381 636 433 650 489 650C545 650 597 636 643 607"
+        style={{ fill: 'none', stroke: '#5865f2', strokeWidth: 14, strokeLinecap: 'butt' }}
+      />
+    </svg>
+  )
+}
+
 /** Marks a toolkit tile from the common, always-on catalog — see ToolTile.tsx. */
 export function LockIcon({ className }: IconProps) {
   return (
