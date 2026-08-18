@@ -18,6 +18,17 @@ services:
     # It writes into the host's working tree, so it must not do so as root.
     # Override UID/GID if yours are not 1000.
     user: "${UID:-1000}:${GID:-1000}"
+    env_file:
+      # MAESTRO_PULSE_HOST_DIR (absolute path to this checkout on the host,
+      # so the run-manually skill can resolve tool paths — see README.md)
+      # lives here rather than in `environment:`, following the same
+      # committed-placeholder / gitignored-real-value split a tool's own
+      # .env/.env.local pair already uses (see CLAUDE.md). .env.local, listed
+      # second, overrides .env when both set it. Neither file has to exist.
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
     volumes:
       - ./resources:/resources
     restart: unless-stopped

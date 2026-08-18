@@ -4,6 +4,17 @@ Workflow orchestrator for coordinating work between humans, automation, and disp
 
 ## Run
 
+Set this checkout's absolute path on the host into `.env.local`:
+
+```bash
+echo "MAESTRO_PULSE_HOST_DIR=/absolute/path/to/this/checkout" > .env.local
+```
+Then run:
+
+```bash
+docker compose up -d --build
+```
+
 ```bash
 docker compose up -d --build
 ```

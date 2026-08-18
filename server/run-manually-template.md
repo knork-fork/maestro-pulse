@@ -6,6 +6,7 @@ this specific request:
 
 - Project: {{PROJECT_NAME}}
 - Project's directory on the host machine (its own git checkout): {{DIR_ON_HOST}}
+- This project's maestro-pulse store folder on the host (where its tools/agents/workflows live): {{PROJECT_HOST_DIR}}
 - Workflow: {{WORKFLOW_PATH}}
 - API host: {{HOST_URL}}
 - Card: {{CARD_TITLE}} (id: {{CARD_ID}})
@@ -19,6 +20,8 @@ this specific request:
 ## The card
 
 {{CARD_DESCRIPTION}}
+
+----
 
 ## Who you're standing in for
 
@@ -35,6 +38,36 @@ mission and instructions as your own for the duration of this task.
 ## Agent instructions
 
 {{AGENT_INSTRUCTIONS}}
+
+----
+
+## Tools available to you
+
+Each tool below is a script on the host machine (`tool.sh`), with its own
+`.env`/`.env.local` alongside it holding whatever credentials it needs — run
+it from its own directory so those are picked up.
+
+### Common tools (available to every project)
+
+{{COMMON_TOOLS}}
+
+### This agent's own project tools
+
+{{PROJECT_TOOLS}}
+
+## Moving this card
+
+maestro-pulse tracks this card's column yourself — nothing moves it
+automatically. Find `move-maestro-pulse-card` in the tools above and run it
+to move this exact card to any column by name:
+
+```
+<move-maestro-pulse-card's tool.sh path> "{{WORKFLOW_PATH}}" "{{CARD_ID}}" "<target column name>"
+```
+
+*When* and *where* to move it — e.g. Ready → Doing when you start, Doing →
+Done when finished — comes from this workflow's own rules below, not from
+this generic paragraph.
 
 ----
 

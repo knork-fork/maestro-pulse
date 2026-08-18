@@ -29,6 +29,17 @@ const COMMON_TOOLS_ROOT = path.resolve(
 )
 
 /**
+ * Absolute path to this maestro-pulse checkout on the host machine — distinct
+ * from a project's own `dir_on_host` (the actual codebase being worked on).
+ * The container has no other way to trace either `common-tools/` (baked into
+ * the image) or a project's own `tools/` (bind-mounted, but the mount's
+ * host-side path is otherwise unknown in here) back to a host path. Optional:
+ * when unset, the run-manually skill still works, it just can't name a real
+ * host path for any tool.
+ */
+const MAESTRO_PULSE_HOST_DIR = process.env.MAESTRO_PULSE_HOST_DIR || null
+
+/**
  * A directory's kind is not something the filesystem records, so the app writes
  * it into the directory itself. Living inside the directory (rather than in one
  * manifest at the root) means a rename or a move by hand carries it along.
@@ -516,7 +527,9 @@ async function getAddToBacklogSkill(req, url) {
  * instructions/profile fields (handholding/verbosity as prose, not raw
  * numbers) and the workflow's own instructions. Mirrors
  * getAddToBacklogSkill's validation shape for the project/workflow/host
- * half. Tool catalogs are added by a later change — this version has none.
+ * half. Also includes both tool catalogs (common tools, plus the agent's own
+ * selected project tools) resolved to real host paths via
+ * MAESTRO_PULSE_HOST_DIR, and the generic move-maestro-pulse-card procedure.
  */
 async function getRunManuallySkill(req, url) {
   const target = relativePath(url.searchParams.get('path'))
@@ -577,6 +590,38 @@ async function getRunManuallySkill(req, url) {
   const agentVerbosity = typeof agentJson.verbosity === 'number' ? agentJson.verbosity : DEFAULT_VERBOSITY
 
   const agentInstructions = await readFile(path.join(agentAbs, AGENT_INSTRUCTIONS_FILE), 'utf8').catch(() => '')
+
+  const agentTools = Array.isArray(agentJson.tools) ? agentJson.tools.filter((t) => typeof t === 'string') : []
+
+  const projectHostDir = MAESTRO_PULSE_HOST_DIR
+    ? path.posix.join(MAESTRO_PULSE_HOST_DIR, 'resources/projects', project)
+    : null
+
+  const commonTools = await readToolsForRunManually(COMMON_TOOLS_ROOT, (toolName) =>
+    MAESTRO_PULSE_HOST_DIR ? path.posix.join(MAESTRO_PULSE_HOST_DIR, 'common-tools', toolName, 'tool.sh') : null,
+  )
+
+  const projectTools = await Promise.all(
+    agentTools.map(async (toolRelPath) => {
+      const toolAbs = path.join(projectAbs, toolRelPath)
+      const raw = await readFile(path.join(toolAbs, 'tool.json'), 'utf8').catch(() => null)
+      let description = ''
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw)
+          description = typeof parsed.description === 'string' ? parsed.description : ''
+        } catch {
+          // malformed tool.json: fall through with an empty description
+        }
+      }
+      return {
+        hostPath: projectHostDir ? path.posix.join(projectHostDir, toolRelPath, 'tool.sh') : null,
+        description,
+        name: toolRelPath.split('/').pop(),
+      }
+    }),
+  )
+
   const workflowInstructions = await readFile(path.join(abs, WORKFLOW_INSTRUCTIONS_FILE), 'utf8').catch(() => '')
 
   const template = await readFile(RUN_MANUALLY_TEMPLATE, 'utf8')
@@ -595,8 +640,56 @@ async function getRunManuallySkill(req, url) {
     .replaceAll('{{AGENT_VERBOSITY_PROSE}}', describeSetting(agentVerbosity, VERBOSITY_DESCRIPTIONS))
     .replaceAll('{{AGENT_INSTRUCTIONS}}', agentInstructions.trim())
     .replaceAll('{{WORKFLOW_INSTRUCTIONS}}', workflowInstructions.trim())
+    .replaceAll('{{PROJECT_HOST_DIR}}', projectHostDir ?? 'not configured (set MAESTRO_PULSE_HOST_DIR)')
+    .replaceAll('{{COMMON_TOOLS}}', renderToolList(commonTools))
+    .replaceAll('{{PROJECT_TOOLS}}', renderToolList(projectTools))
 
   return { status: 200, body: filled, raw: true }
+}
+
+/**
+ * One tool's absolute host path + description, read from its own tool.json.
+ * `hostPathFor` isolates the one difference between the two call sites
+ * (common tools resolve under MAESTRO_PULSE_HOST_DIR/common-tools, project
+ * tools resolve under MAESTRO_PULSE_HOST_DIR/resources/projects/<project>) —
+ * never dir_on_host, which is an unrelated path (see the comment above
+ * getRunManuallySkill for why).
+ */
+async function readToolsForRunManually(toolsRoot, hostPathFor) {
+  const entries = await readdir(toolsRoot, { withFileTypes: true }).catch(() => [])
+  const folders = entries.filter((entry) => entry.isDirectory())
+  return Promise.all(
+    folders.map(async (folder) => {
+      const raw = await readFile(path.join(toolsRoot, folder.name, 'tool.json'), 'utf8').catch(() => null)
+      let description = ''
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw)
+          description = typeof parsed.description === 'string' ? parsed.description : ''
+        } catch {
+          // malformed tool.json: fall through with an empty description
+        }
+      }
+      return { hostPath: hostPathFor(folder.name), description, name: folder.name }
+    }),
+  )
+}
+
+/**
+ * Renders a tool list into the markdown bullet form the template embeds. A
+ * tool whose host path could not be resolved (MAESTRO_PULSE_HOST_DIR unset)
+ * still gets a line naming it, since telling the harness "the tool exists
+ * but its path is unknown" beats silently dropping it.
+ */
+function renderToolList(tools) {
+  if (tools.length === 0) return '_None._'
+  return tools
+    .map((tool) =>
+      tool.hostPath
+        ? `- \`${tool.hostPath}\`: ${tool.description || '(no description)'}`
+        : `- ${tool.name} (host path not configured): ${tool.description || '(no description)'}`,
+    )
+    .join('\n')
 }
 
 async function renameEntry(req) {

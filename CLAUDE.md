@@ -129,6 +129,18 @@ exists so a tool available to *every* project by default ships with the app
 itself rather than living in the user's own gitignored store — see the
 data-shape section below for how the frontend renders it.
 
+The api container has no way to trace either `common-tools/` (baked into the
+image) or a project's own `tools/` (bind-mounted, but the mount's host-side
+path is otherwise unknown to the container) back to a path on the host
+machine — needed so the run-manually skill (see the data-shape section below)
+can hand an external agent a real, runnable path to a tool's `tool.sh`.
+`MAESTRO_PULSE_HOST_DIR`, an optional env var set in
+[docker-compose.yml](docker-compose.yml), answers that: the absolute path to
+this maestro-pulse checkout on the host. It is deliberately a separate
+concept from a project's own `dir_on_host` — that path answers an unrelated
+question (where the actual codebase being worked on lives), and must never be
+used to build a tool path.
+
 ### Frontend state
 
 There is no store. [useProjectTree.ts](src/hooks/useProjectTree.ts) owns the
@@ -438,9 +450,14 @@ card's own title/description, the responsible agent's `description`/
 `mission` fields and its full `agent.md`, and the workflow's own
 `workflow.md` — with `handholding`/`verbosity` rendered as the same prose
 [AgentView.tsx](src/components/AgentView.tsx)/[AgentDialog.tsx](src/components/AgentDialog.tsx)
-already show next to each slider, not as raw numbers. Tool catalogs (common
-tools plus the agent's own project tools) are not part of this route yet —
-a separate, later change adds them to the same handler/template.
+already show next to each slider, not as raw numbers. It also includes both
+tool catalogs — every common tool, and the responsible agent's own selected
+project tools (`agent.json`'s `tools`) — each resolved to a real absolute
+host path via `MAESTRO_PULSE_HOST_DIR` (see the architecture section above),
+degrading to a per-tool "host path not configured" note rather than failing
+the whole request when that env var is unset; and the generic
+`move-maestro-pulse-card` card-movement procedure, since an external harness
+picking up a card by hand needs to know that mechanism exists at all.
 
 An `agent` is marked and created the same way, one level down inside a
 project's `agents` folder instead — see `scaffoldAgent` in
