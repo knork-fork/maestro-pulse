@@ -72,8 +72,9 @@ dependency-free Node API that owns the folder tree.
 | An agent's own `agent.md` — fetch, quiet reload driven by the tree, and `save` for the view's own Edit button | [src/hooks/useAgentInstructions.ts](src/hooks/useAgentInstructions.ts) |
 | The raw-markdown editor for `agent.md`, with tips and a role-template picker — reachable from the view's Instructions card and the tree's "Edit instructions" row | [src/components/AgentInstructionsModal.tsx](src/components/AgentInstructionsModal.tsx) |
 | The role templates (coder, reviewer, security specialist, researcher, QA, salesperson, PM, product manager) the instructions editor's template picker offers | [src/data/agentTemplates.ts](src/data/agentTemplates.ts) |
-| A workflow's kanban board — columns, bot/human column styling, per-card move/delete/archive controls, the read-only card detail modal, and the Backlog-only "add a ticket" button | [src/components/KanbanBoard.tsx](src/components/KanbanBoard.tsx), [src/components/Column.tsx](src/components/Column.tsx), [src/components/Card.tsx](src/components/Card.tsx), [src/components/CardMoveMenu.tsx](src/components/CardMoveMenu.tsx), [src/components/CardDetailModal.tsx](src/components/CardDetailModal.tsx) |
+| A workflow's kanban board — columns, bot/human column styling, per-card move/delete/archive controls, the read-only card detail modal and its "Run manually" control, and the Backlog-only "add a ticket" button | [src/components/KanbanBoard.tsx](src/components/KanbanBoard.tsx), [src/components/Column.tsx](src/components/Column.tsx), [src/components/Card.tsx](src/components/Card.tsx), [src/components/CardMoveMenu.tsx](src/components/CardMoveMenu.tsx), [src/components/CardDetailModal.tsx](src/components/CardDetailModal.tsx) |
 | The instructional modal a Backlog "+" click opens — builds the add-to-backlog skill URL for an external agent to fetch, never calls the API itself | [src/components/AddToBacklogModal.tsx](src/components/AddToBacklogModal.tsx) |
+| The instructional modal the card detail view's "Run manually" button opens — builds the run-manually skill URL for an external agent to fetch, never calls the API itself | [src/components/RunManuallyModal.tsx](src/components/RunManuallyModal.tsx) |
 | A workflow board's own data — fetch, quiet 60s poll, an immediate quiet reload whenever the tree reloads, and the per-card move/delete/archive mutations (moves guarded against a stale column) | [src/hooks/useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) |
 | Rename dialog / delete confirmation | [src/components/RenameDialog.tsx](src/components/RenameDialog.tsx), [src/components/ConfirmDialog.tsx](src/components/ConfirmDialog.tsx) |
 | Pending + error state for one user action | [src/hooks/useAsyncAction.ts](src/hooks/useAsyncAction.ts) |
@@ -88,6 +89,7 @@ dependency-free Node API that owns the folder tree.
 | Tools available to every project by default — baked into the api image, not part of the user's own (gitignored) project store, so a fresh install has them; served by `GET /api/common-tools` | [common-tools/](common-tools/) |
 | nginx server, listen port, the API proxy, and the skills proxy | [nginx.conf](nginx.conf) |
 | The add-to-backlog skill template, filled in per-request and handed to an external Claude Code session | [server/add-to-backlog-template.md](server/add-to-backlog-template.md) |
+| The run-manually skill template, filled in per-request and handed to an external Claude Code session | [server/run-manually-template.md](server/run-manually-template.md) |
 | Both services, host port, and the store's bind mount | [docker-compose.yml](docker-compose.yml) |
 | User-facing run instructions | [README.md](README.md) |
 
@@ -212,7 +214,11 @@ button does not create a card through the UI either — it only opens
 [AddToBacklogModal.tsx](src/components/AddToBacklogModal.tsx), which hands the
 user text to paste into an external Claude Code session; that session is what
 actually calls the API (see the data-shape section below). There is still no
-way for the browser itself to create a card. Any editable column (Ready, Doing, or a custom one)
+way for the browser itself to create a card. The card detail modal's own
+"Run manually" button is no longer a disabled stub either — it is enabled
+exactly when the card's column is a bot column, and opens
+[RunManuallyModal.tsx](src/components/RunManuallyModal.tsx) the same
+instructional way; the browser still never executes anything itself. Any editable column (Ready, Doing, or a custom one)
 renamed via [WorkflowDialog.tsx](src/components/WorkflowDialog.tsx) after it
 has cards orphans them rather than migrating them, the same class of gap as a
 renamed project not revisiting what was written into it.
@@ -422,6 +428,19 @@ its placeholders swapped for that project's real name, its `dir_on_host`
 (from `project.json`), that host, and the workflow's own `workflow.md`
 content (empty/missing renders as nothing, so the template reads cleanly
 either way) — as raw markdown, not JSON, the one route in this API that isn't.
+
+`GET /skills/run-manually` (`getRunManuallySkill`) follows the identical
+project/workflow/host validation shape, taking `path` plus a `card` param
+naming one card on that board; it 400s if the card's column is not a bot
+column, since only a bot column has an agent to stand in for. It returns
+[run-manually-template.md](server/run-manually-template.md) filled with the
+card's own title/description, the responsible agent's `description`/
+`mission` fields and its full `agent.md`, and the workflow's own
+`workflow.md` — with `handholding`/`verbosity` rendered as the same prose
+[AgentView.tsx](src/components/AgentView.tsx)/[AgentDialog.tsx](src/components/AgentDialog.tsx)
+already show next to each slider, not as raw numbers. Tool catalogs (common
+tools plus the agent's own project tools) are not part of this route yet —
+a separate, later change adds them to the same handler/template.
 
 An `agent` is marked and created the same way, one level down inside a
 project's `agents` folder instead — see `scaffoldAgent` in

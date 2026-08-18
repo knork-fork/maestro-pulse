@@ -2,7 +2,12 @@ import type { WorkflowCard } from '../data/api'
 import { SafeMarkdown } from '../views/MarkdownView'
 import { Modal } from './Modal'
 
-type Props = { card: WorkflowCard; onCancel: () => void }
+type Props = {
+  card: WorkflowCard
+  bot: boolean
+  onCancel: () => void
+  onRunManually: () => void
+}
 
 /**
  * Read-only: cards can't be edited from the board, so this is just a bigger
@@ -15,7 +20,7 @@ type Props = { card: WorkflowCard; onCancel: () => void }
  * something produces them; there is no schema field for that yet, so it
  * renders as a list with nothing in it rather than a sentence about it.
  */
-export function CardDetailModal({ card, onCancel }: Props) {
+export function CardDetailModal({ card, bot, onCancel, onRunManually }: Props) {
   return (
     <Modal title={card.title} wide onCancel={onCancel}>
       <p className="card-detail__meta">In {card.column}</p>
@@ -59,7 +64,13 @@ export function CardDetailModal({ card, onCancel }: Props) {
       </div>
 
       <div className="modal__actions">
-        <button type="button" className="btn" disabled>
+        <button
+          type="button"
+          className="btn"
+          disabled={!bot}
+          title={bot ? undefined : 'Only available for cards in a bot column'}
+          onClick={onRunManually}
+        >
           Run manually
         </button>
         <button type="button" className="btn" onClick={onCancel}>

@@ -145,6 +145,7 @@ const DEFAULT_VERBOSITY = 50
  */
 const SKILLS_DIR = path.dirname(fileURLToPath(import.meta.url))
 const ADD_TO_BACKLOG_TEMPLATE = path.join(SKILLS_DIR, 'add-to-backlog-template.md')
+const RUN_MANUALLY_TEMPLATE = path.join(SKILLS_DIR, 'run-manually-template.md')
 
 /** Bounds the recursive read against deep nesting and symlink cycles. */
 const MAX_DEPTH = 12
@@ -176,6 +177,7 @@ const routes = {
   'PUT /api/agent-instructions': updateAgentInstructions,
   'PUT /api/workflow-instructions': updateWorkflowInstructions,
   'GET /skills/add-to-backlog': getAddToBacklogSkill,
+  'GET /skills/run-manually': getRunManuallySkill,
 }
 
 async function getTree() {
@@ -508,6 +510,95 @@ async function getAddToBacklogSkill(req, url) {
   return { status: 200, body: filled, raw: true }
 }
 
+/**
+ * Serves the run-manually skill: everything an external Claude Code session
+ * needs to pick up and execute one bot-column card by hand — the agent's own
+ * instructions/profile fields (handholding/verbosity as prose, not raw
+ * numbers) and the workflow's own instructions. Mirrors
+ * getAddToBacklogSkill's validation shape for the project/workflow/host
+ * half. Tool catalogs are added by a later change — this version has none.
+ */
+async function getRunManuallySkill(req, url) {
+  const target = relativePath(url.searchParams.get('path'))
+  const abs = path.join(ROOT, target)
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
+    throw new HttpError(404, `No such workflow: ${target}`)
+  }
+
+  const project = target.split('/').slice(0, -2).join('/')
+  const projectAbs = path.join(ROOT, project)
+  if (!(await isDirectory(projectAbs)) || (await directoryType(projectAbs)) !== 'project') {
+    throw new HttpError(404, `No such project: ${project}`)
+  }
+
+  if (!req.headers.host) throw new HttpError(400, 'Missing Host header')
+  const host = `http://${req.headers.host}`
+
+  const projectJson = await guardFs(
+    () => readFile(path.join(projectAbs, PROJECT_FILE), 'utf8'),
+    `No such project: ${project}`,
+  )
+  let dirOnHost
+  try {
+    dirOnHost = JSON.parse(projectJson).dir_on_host
+  } catch {
+    throw new HttpError(500, 'project.json is not valid JSON')
+  }
+
+  const cardId = validCardId(url.searchParams.get('card'))
+  const { columns, cards } = await readWorkflowJson(abs)
+  const card = cards.find((c) => c.id === cardId)
+  if (!card) throw new HttpError(404, `No such card: ${cardId}`)
+
+  const column = columns.find((c) => c.name === card.column)
+  if (!column || !isBotColumn(column)) {
+    throw new HttpError(400, `Card "${cardId}" is not in a bot column`)
+  }
+
+  const agentRelPath = column.agent
+  const agentAbs = path.join(ROOT, agentRelPath)
+  if (!(await isDirectory(agentAbs)) || (await directoryType(agentAbs)) !== 'agent') {
+    throw new HttpError(404, `No such agent: ${agentRelPath}`)
+  }
+
+  const agentJsonRaw = await guardFs(
+    () => readFile(path.join(agentAbs, AGENT_FILE), 'utf8'),
+    `No such agent: ${agentRelPath}`,
+  )
+  let agentJson
+  try {
+    agentJson = JSON.parse(agentJsonRaw)
+  } catch {
+    throw new HttpError(500, 'agent.json is not valid JSON')
+  }
+  const agentDescription = typeof agentJson.description === 'string' ? agentJson.description : ''
+  const agentMission = typeof agentJson.mission === 'string' ? agentJson.mission : ''
+  const agentHandholding = typeof agentJson.handholding === 'number' ? agentJson.handholding : DEFAULT_HANDHOLDING
+  const agentVerbosity = typeof agentJson.verbosity === 'number' ? agentJson.verbosity : DEFAULT_VERBOSITY
+
+  const agentInstructions = await readFile(path.join(agentAbs, AGENT_INSTRUCTIONS_FILE), 'utf8').catch(() => '')
+  const workflowInstructions = await readFile(path.join(abs, WORKFLOW_INSTRUCTIONS_FILE), 'utf8').catch(() => '')
+
+  const template = await readFile(RUN_MANUALLY_TEMPLATE, 'utf8')
+  const filled = template
+    .replaceAll('{{PROJECT_NAME}}', project)
+    .replaceAll('{{PROJECT_JSON}}', projectJson.trim())
+    .replaceAll('{{DIR_ON_HOST}}', String(dirOnHost))
+    .replaceAll('{{HOST_URL}}', host)
+    .replaceAll('{{WORKFLOW_PATH}}', target)
+    .replaceAll('{{CARD_ID}}', cardId)
+    .replaceAll('{{CARD_TITLE}}', card.title)
+    .replaceAll('{{CARD_DESCRIPTION}}', card.description || '')
+    .replaceAll('{{AGENT_DESCRIPTION}}', agentDescription)
+    .replaceAll('{{AGENT_MISSION}}', agentMission)
+    .replaceAll('{{AGENT_HANDHOLDING_PROSE}}', describeSetting(agentHandholding, HANDHOLDING_DESCRIPTIONS))
+    .replaceAll('{{AGENT_VERBOSITY_PROSE}}', describeSetting(agentVerbosity, VERBOSITY_DESCRIPTIONS))
+    .replaceAll('{{AGENT_INSTRUCTIONS}}', agentInstructions.trim())
+    .replaceAll('{{WORKFLOW_INSTRUCTIONS}}', workflowInstructions.trim())
+
+  return { status: 200, body: filled, raw: true }
+}
+
 async function renameEntry(req) {
   const body = await readJson(req)
   const target = relativePath(body.path)
@@ -716,6 +807,39 @@ async function readWorkflowJson(abs) {
 /** The one predicate that decides bot-vs-human — covers Ready, Doing and any
  *  custom bot column identically; Backlog/Done never carry a `bot` key at all. */
 const isBotColumn = (column) => column?.bot === true
+
+// Mirrors HANDHOLDING_DESCRIPTIONS/VERBOSITY_DESCRIPTIONS in
+// src/data/agent.ts (server code can't import that .ts module) — keep in
+// sync if that file's prose ever changes.
+const HANDHOLDING_DESCRIPTIONS = {
+  0: 'Agent decides everything itself.',
+  25: 'Escalate architecture/design decisions only.',
+  50: 'Escalate significant ambiguity and tradeoffs.',
+  75: 'Ask on most non-trivial decisions.',
+  100: 'Ask whenever there is meaningful ambiguity.',
+}
+
+const VERBOSITY_DESCRIPTIONS = {
+  0: 'Caveman',
+  25: 'Concise',
+  50: 'Normal',
+  75: 'Detailed',
+  100: 'Scholar',
+}
+
+/**
+ * Renders a 0-100 setting as the prose an external harness should follow,
+ * snapping to the nearest documented step. 50 is called out explicitly as
+ * the default so it reads as "behave normally", not as an instruction to
+ * follow — matching HANDHOLDING_TOOLTIP/VERBOSITY_TOOLTIP's own "50% is the
+ * baseline value" framing client-side.
+ */
+function describeSetting(value, descriptions) {
+  const steps = [0, 25, 50, 75, 100]
+  const nearest = steps.reduce((a, b) => (Math.abs(b - value) < Math.abs(a - value) ? b : a))
+  const prose = descriptions[nearest]
+  return nearest === 50 ? `${prose} (this is the default — no special adjustment needed)` : prose
+}
 
 /**
  * Applies one card action, validated against the card's *current* column —

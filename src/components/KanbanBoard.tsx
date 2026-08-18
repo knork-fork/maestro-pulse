@@ -5,6 +5,7 @@ import { AddToBacklogModal } from './AddToBacklogModal'
 import { CardDetailModal } from './CardDetailModal'
 import { Column } from './Column'
 import { ConfirmDialog } from './ConfirmDialog'
+import { RunManuallyModal } from './RunManuallyModal'
 
 /** `treeVersion` is the tree's own `nodes` array — a fresh reference every
  *  time `useProjectTree` reloads, including right after a workflow edit
@@ -25,6 +26,7 @@ export function KanbanBoard({ path, name, treeVersion }: Props) {
   const [openCard, setOpenCard] = useState<WorkflowCard | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<WorkflowCard | null>(null)
   const [addingToBacklog, setAddingToBacklog] = useState(false)
+  const [runningManually, setRunningManually] = useState<WorkflowCard | null>(null)
   /** Skips the redundant reload on mount — `useWorkflowBoard` already loads
    *  itself then; this effect only needs to fire on a *later* tree reload. */
   const mounted = useRef(false)
@@ -90,6 +92,7 @@ export function KanbanBoard({ path, name, treeVersion }: Props) {
 
   const { description, columns, cards } = state.board
   const lastIndex = columns.length - 1
+  const openColumn = openCard ? columns.find((c) => c.name === openCard.column) : undefined
 
   return (
     <div className="board">
@@ -115,7 +118,14 @@ export function KanbanBoard({ path, name, treeVersion }: Props) {
         ))}
       </div>
 
-      {openCard && <CardDetailModal card={openCard} onCancel={() => setOpenCard(null)} />}
+      {openCard && (
+        <CardDetailModal
+          card={openCard}
+          bot={openColumn?.bot === true}
+          onCancel={() => setOpenCard(null)}
+          onRunManually={() => setRunningManually(openCard)}
+        />
+      )}
 
       {confirmDelete && (
         <ConfirmDialog
@@ -133,6 +143,14 @@ export function KanbanBoard({ path, name, treeVersion }: Props) {
 
       {addingToBacklog && (
         <AddToBacklogModal path={path} onCancel={() => setAddingToBacklog(false)} />
+      )}
+
+      {runningManually && (
+        <RunManuallyModal
+          path={path}
+          cardId={runningManually.id}
+          onCancel={() => setRunningManually(null)}
+        />
       )}
     </div>
   )
