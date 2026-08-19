@@ -23,6 +23,16 @@
 > a short map that stays correct beats a thorough one that goes stale. If an edit
 > you're about to make adds a WHAT or a HOW, it belongs in a code comment, not
 > here.
+>
+> **Reading this for a scoped task — don't explore the whole map.** If the
+> request names a narrow concern ("add a new tool", "rename a column"), find
+> that row in the Layout table (or the matching paragraph below it) and open
+> only the file(s) it names, plus whatever they directly reference. Do not
+> read every file in the table, or every section of this document, on the way
+> to a small change — that defeats the point of having a map. Widen the search
+> only when the task itself is broad (a new cross-cutting concern, "how does
+> data flow end to end"), or when the scoped file turns out to reference
+> something this file doesn't cover.
 
 ## What this is
 
