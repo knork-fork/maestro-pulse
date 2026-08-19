@@ -60,11 +60,7 @@ since that fallback is a last resort, not a style choice.
 ## The icon vocabulary
 
 `tool.json`'s `icon` field is one key from the fixed vocabulary defined in
-`src/data/toolIcons.ts`:
-
-`branch`, `commit`, `diff`, `terminal`, `search`, `file`, `edit`, `play`,
-`book`, `list`, `move`, `push`, `board`, `trello`, `google`, `outline`,
-`gitlab`, `jira`, `discord`, `wrench`
+`src/data/toolIcons.ts` (all available icons are listed  there).
 
 Two special cases, not to be confused with each other:
 
