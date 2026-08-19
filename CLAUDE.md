@@ -485,10 +485,13 @@ project/workflow/host validation shape, taking `path` plus a `card` param
 naming one card on that board; it 400s if the card's column is not a bot
 column, since only a bot column has an agent to stand in for. It returns
 [run-manually-template.md](server/run-manually-template.md) filled with the
-card's own title/description, the responsible agent's `description`/
-`mission` fields and its full `agent.md`, and the workflow's own
-`workflow.md` — with `handholding`/`verbosity` rendered as the same prose
-[AgentView.tsx](src/components/AgentView.tsx)/[AgentDialog.tsx](src/components/AgentDialog.tsx)
+card's own title/description, its own `issues` and `attachments` (a file
+attachment resolved to a real host path the same way a project tool is,
+rather than left as the maestro-pulse-relative path `workflow.json` stores;
+a URL attachment is passed through as-is), the responsible agent's
+`description`/`mission` fields and its full `agent.md`, and the workflow's
+own `workflow.md` — with `handholding`/`verbosity` rendered as the same
+prose [AgentView.tsx](src/components/AgentView.tsx)/[AgentDialog.tsx](src/components/AgentDialog.tsx)
 already show next to each slider, not as raw numbers. It also includes both
 tool catalogs — every common tool, and the responsible agent's own selected
 project tools (`agent.json`'s `tools`) — each resolved to a real absolute
@@ -496,7 +499,12 @@ host path via `MAESTRO_PULSE_HOST_DIR` (see the architecture section above),
 degrading to a per-tool "host path not configured" note rather than failing
 the whole request when that env var is unset; and the generic
 `move-maestro-pulse-card` card-movement procedure, since an external harness
-picking up a card by hand needs to know that mechanism exists at all.
+picking up a card by hand needs to know that mechanism exists at all. The
+tool catalogs and the attachment list are deliberately framed in the
+template as an index the harness picks from rather than pre-fetched content,
+with a common tool preferred over an overlapping project one — the
+tool-authoring half of that same guidance lives in
+[docs/tools/README.md](docs/tools/README.md).
 
 An `agent` is marked and created the same way, one level down inside a
 project's `agents` folder instead — see `scaffoldAgent` in

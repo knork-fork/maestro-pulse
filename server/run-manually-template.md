@@ -21,6 +21,18 @@ this specific request:
 
 {{CARD_DESCRIPTION}}
 
+### Open issues
+
+{{CARD_ISSUES}}
+
+### Attachments
+
+Each entry below is a link or a real path on the host machine — nothing has
+been read into this context for you. Treat this the same as the tool list
+below: an index to pick from, not pre-fetched content.
+
+{{CARD_ATTACHMENTS}}
+
 ----
 
 ## Who you're standing in for
@@ -46,6 +58,11 @@ mission and instructions as your own for the duration of this task.
 Each tool below is a script on the host machine (`tool.sh`), with its own
 `.env`/`.env.local` alongside it holding whatever credentials it needs — run
 it from its own directory so those are picked up.
+
+This catalog is an index, not pre-fetched content, the same as the
+attachments above — you choose what to actually run based on each tool's own
+description rather than opening every one. When a common tool and a project
+tool could both do the job, prefer the common tool.
 
 ### Common tools (available to every project)
 

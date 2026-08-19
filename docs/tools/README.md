@@ -64,6 +64,16 @@ example of the env-loading preamble and this contract.
 description) rather than making the tool unreadable — but write them anyway,
 since that fallback is a last resort, not a style choice.
 
+`description` carries more weight than it looks like it should: the
+run-manually skill hands an external harness a flat index of every tool
+(common plus the agent's own project ones) and tells it to pick what's
+relevant from that index rather than opening each one — so this is the one
+line the harness judges relevance from, without ever seeing `tool.sh`
+itself. Write it specific enough to decide on its own. A common tool's
+description should also make clear it isn't scoped to one project, since
+the harness is told to prefer a common tool over a project tool that could
+do the same job.
+
 ## The icon vocabulary
 
 `tool.json`'s `icon` field is one key from the fixed vocabulary defined in

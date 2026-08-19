@@ -663,6 +663,10 @@ async function getAddToBacklogSkill(req, url) {
  * half. Also includes both tool catalogs (common tools, plus the agent's own
  * selected project tools) resolved to real host paths via
  * MAESTRO_PULSE_HOST_DIR, and the generic move-maestro-pulse-card procedure.
+ * Also includes the card's own `issues` and `attachments` (the latter
+ * resolved to a real host path the same way project tools are, when it
+ * isn't a bare URL) — both framed to the harness, alongside the tool
+ * catalogs, as an index to pick from rather than pre-fetched content.
  */
 async function getRunManuallySkill(req, url) {
   const target = relativePath(url.searchParams.get('path'))
@@ -700,6 +704,13 @@ async function getRunManuallySkill(req, url) {
   if (!column || !isBotColumn(column)) {
     throw new HttpError(400, `Card "${cardId}" is not in a bot column`)
   }
+
+  const cardIssues = Array.isArray(card.issues)
+    ? card.issues.filter((issue) => issue && typeof issue.title === 'string')
+    : []
+  const cardAttachments = Array.isArray(card.attachments)
+    ? card.attachments.filter((a) => typeof a === 'string')
+    : []
 
   const agentRelPath = column.agent
   const agentAbs = path.join(ROOT, agentRelPath)
@@ -767,6 +778,8 @@ async function getRunManuallySkill(req, url) {
     .replaceAll('{{CARD_ID}}', cardId)
     .replaceAll('{{CARD_TITLE}}', card.title)
     .replaceAll('{{CARD_DESCRIPTION}}', card.description || '')
+    .replaceAll('{{CARD_ISSUES}}', renderIssueList(cardIssues))
+    .replaceAll('{{CARD_ATTACHMENTS}}', renderAttachmentList(cardAttachments, projectHostDir))
     .replaceAll('{{AGENT_DESCRIPTION}}', agentDescription)
     .replaceAll('{{AGENT_MISSION}}', agentMission)
     .replaceAll('{{AGENT_HANDHOLDING_PROSE}}', describeSetting(agentHandholding, HANDHOLDING_DESCRIPTIONS))
@@ -822,6 +835,40 @@ function renderToolList(tools) {
         ? `- \`${tool.hostPath}\`: ${tool.description || '(no description)'}`
         : `- ${tool.name} (host path not configured): ${tool.description || '(no description)'}`,
     )
+    .join('\n')
+}
+
+/**
+ * Renders a card's issues into the markdown bullet form the run-manually
+ * template embeds — solved issues are struck through and marked rather than
+ * dropped, mirroring how CardDetailModal.tsx renders the same field.
+ */
+function renderIssueList(issues) {
+  if (issues.length === 0) return '_None._'
+  return issues
+    .map((issue) => {
+      const title = issue.is_solved ? `~~${issue.title}~~ (solved)` : issue.title
+      return issue.description ? `- ${title}: ${issue.description}` : `- ${title}`
+    })
+    .join('\n')
+}
+
+/**
+ * Renders a card's attachments into the markdown bullet form the
+ * run-manually template embeds. A URL attachment prints as-is; a file
+ * attachment resolves to a real host path under `projectHostDir` — the same
+ * value/fallback convention renderToolList uses for a project tool — since
+ * the harness needs a path it can actually open, not the maestro-pulse-
+ * relative one `workflow.json` stores.
+ */
+function renderAttachmentList(attachments, projectHostDir) {
+  if (attachments.length === 0) return '_None._'
+  return attachments
+    .map((attachment) => {
+      if (isUrlAttachment(attachment)) return `- ${attachment}`
+      const hostPath = projectHostDir ? path.posix.join(projectHostDir, attachment) : null
+      return hostPath ? `- \`${hostPath}\`` : `- ${attachment} (host path not configured)`
+    })
     .join('\n')
 }
 
