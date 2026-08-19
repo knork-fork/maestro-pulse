@@ -83,6 +83,7 @@ dependency-free Node API that owns the folder tree.
 | The raw-markdown editor for `agent.md`, with tips and a role-template picker — reachable from the view's Instructions card and the tree's "Edit instructions" row | [src/components/AgentInstructionsModal.tsx](src/components/AgentInstructionsModal.tsx) |
 | The role templates (coder, reviewer, security specialist, researcher, QA, salesperson, PM, product manager) the instructions editor's template picker offers | [src/data/agentTemplates.ts](src/data/agentTemplates.ts) |
 | A workflow's kanban board — columns, bot/human column styling, per-card move/delete/archive controls, the read-only card detail modal and its "Run manually" control, and the Backlog-only "add a ticket" button | [src/components/KanbanBoard.tsx](src/components/KanbanBoard.tsx), [src/components/Column.tsx](src/components/Column.tsx), [src/components/Card.tsx](src/components/Card.tsx), [src/components/CardMoveMenu.tsx](src/components/CardMoveMenu.tsx), [src/components/CardDetailModal.tsx](src/components/CardDetailModal.tsx) |
+| The card detail modal's "Attached" viewer — fetches an md attachment and renders it, with a copy-raw-to-clipboard button | [src/components/AttachmentViewModal.tsx](src/components/AttachmentViewModal.tsx) |
 | The instructional modal a Backlog "+" click opens — builds the add-to-backlog skill URL for an external agent to fetch, never calls the API itself | [src/components/AddToBacklogModal.tsx](src/components/AddToBacklogModal.tsx) |
 | The instructional modal the card detail view's "Run manually" button opens — builds the run-manually skill URL for an external agent to fetch, never calls the API itself | [src/components/RunManuallyModal.tsx](src/components/RunManuallyModal.tsx) |
 | A workflow board's own data — fetch, quiet 60s poll, an immediate quiet reload whenever the tree reloads, and the per-card move/delete/archive mutations (moves guarded against a stale column) | [src/hooks/useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts) |
@@ -409,7 +410,7 @@ dialog the way a broken `workflow.json` does — a workflow created before this
 file existed just opens with an empty instructions field.
 
 A workflow's `workflow.json` additionally holds `cards` and `archived`, each a
-flat array of `{ id, title, description, column, status, last_activity, issues }`,
+flat array of `{ id, title, description, column, status, last_activity, issues, attachments }`,
 where `column` names a
 column by its `name` rather than an id - the same no-id convention columns
 themselves already follow (so a custom column renamed after it has cards
@@ -429,6 +430,34 @@ already left the column it was in when the user acted — a client-side guard
 only, since the server already independently re-validates the same action;
 see `moveUp`/`moveDown`/`moveRight` in
 [useWorkflowBoard.ts](src/hooks/useWorkflowBoard.ts).
+
+A card's own `attachments` is a flat array of strings — either a
+project-relative path under the project's own `attachments/` folder, or a
+bare URL — with no other metadata alongside it; which kind an entry is is
+inferred from its own text (`isUrlAttachment`), never stored separately.
+`attachments/` is a project-level folder shared by every workflow/card in
+that project, not one of `PROJECT_SUBDIRECTORIES` — it's created on demand,
+so an existing project needs no migration to gain it. Deliberately, no route
+ever accepts attachment *content*: `POST /api/workflow-attachments`
+(`createAttachmentFile`) only ever writes an *empty* timestamped file and
+hands back both its project-relative path and (via `MAESTRO_PULSE_HOST_DIR`)
+a real host path, so the external harness that asked for it edits that file
+directly with its own file tools, the same reasoning a project's own tools
+are resolved to host paths for run-manually rather than proxied through this
+API. `GET /api/workflow-attachments` (`listCardAttachments`) reads one card's
+current array back, and `PATCH /api/workflow-attachments` (`attachToCard`)
+is the one narrow, idempotent way that array itself grows — attaching
+something already on the card is a no-op, not an error, since a harness is
+meant to call it as "attach this if it isn't already" without checking
+first. All three exist to be called by the `manage-card-attachments` common
+tool's three matching subcommands (`create`/`list`/`attach`), not the
+browser, which only ever renders `attachments`
+([CardDetailModal.tsx](src/components/CardDetailModal.tsx)'s "Attached"
+section and [AttachmentViewModal.tsx](src/components/AttachmentViewModal.tsx))
+— the same "external tool writes, browser only reads" split
+`createWorkflowCard`/`move-to` already have, extended here to keep a harness
+out of `workflow.json` entirely rather than trusting it to hand-edit a
+shared file correctly.
 
 Creating a card is the one action that grows `cards` rather than
 reordering/relabelling/shrinking it, so it is its own route,

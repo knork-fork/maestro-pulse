@@ -1,0 +1,5 @@
+{
+  "title": "Manage Card Attachments",
+  "description": "Create an empty attachment file for a card to edit directly, list what's already attached, or record a file/URL on a card — a deterministic layer so a harness never hand-edits workflow.json itself.",
+  "icon": "file"
+}

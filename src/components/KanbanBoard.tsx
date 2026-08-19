@@ -122,6 +122,7 @@ export function KanbanBoard({ path, name, treeVersion }: Props) {
         <CardDetailModal
           card={openCard}
           bot={openColumn?.bot === true}
+          workflowPath={path}
           onCancel={() => setOpenCard(null)}
           onRunManually={() => setRunningManually(openCard)}
         />

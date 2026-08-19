@@ -152,7 +152,14 @@ export type WorkflowColumn = {
  *  none yet. `issues` is a flat list of problems flagged on the card;
  *  `is_solved` renders as struck-through rather than removing the entry, and
  *  an issue's `description` shows as a hover tooltip on its `title` rather
- *  than inline. */
+ *  than inline. `attachments` is a flat list of either a project-relative
+ *  path (`"attachments/<timestamp>-name.md"`) or a bare URL — which kind an
+ *  entry is is never stored separately, only inferred from its own text (see
+ *  `isUrlAttachment` in `CardDetailModal.tsx`). Grown only by the
+ *  `manage-card-attachments` common tool's `attach` subcommand
+ *  (`PATCH /api/workflow-attachments`); the browser only ever renders it,
+ *  and never touches the attachment file's own content either — that's
+ *  edited directly on disk by whatever harness created it. */
 export type WorkflowCard = {
   id: string
   title: string
@@ -161,6 +168,7 @@ export type WorkflowCard = {
   status: 'in_session' | 'blocked' | null
   last_activity: string | null
   issues: { title: string; is_solved: boolean; description: string }[]
+  attachments: string[]
 }
 
 export type CardAction = 'move-up' | 'move-down' | 'move-right' | 'delete' | 'archive'

@@ -83,6 +83,26 @@ const MAX_COLUMN_NAME_LENGTH = 60
  */
 const CARD_ACTIONS = ['move-up', 'move-down', 'move-right', 'move-to', 'delete', 'archive']
 
+/**
+ * Where a card's md/url attachments live — one folder shared by every
+ * workflow/card in a project, not per-workflow. Deliberately not in
+ * PROJECT_SUBDIRECTORIES: an existing project has no need to be migrated for
+ * it, so `createAttachmentFile` creates it on demand instead, the same
+ * tolerance `ensureRoot` already has for the projects root itself.
+ *
+ * Content never crosses this API: `createAttachmentFile` only ever writes an
+ * *empty* file. The `manage-card-attachments` common tool hands its caller a
+ * real host path to that file (via MAESTRO_PULSE_HOST_DIR) so a harness edits
+ * it directly with its own file tools — the same reasoning a project's own
+ * tools are resolved to host paths for run-manually, rather than proxied
+ * through this API. That split is also why there is no "edit" endpoint here:
+ * editing is just editing a file on disk, and the one thing worth keeping
+ * deterministic is `workflow.json`'s own `attachments` array, which
+ * `attachToCard` is the only way to grow.
+ */
+const ATTACHMENTS_SUBDIR = 'attachments'
+const MAX_ATTACHMENT_NAME_LENGTH = 100
+
 /** What a new agent is given — a single file, same as a workflow, with no
  *  fields that need server-side assembly. */
 const AGENT_FILE = 'agent.json'
@@ -185,6 +205,9 @@ const routes = {
   'DELETE /api/entry': deleteEntry,
   'PATCH /api/workflow-cards': updateWorkflowCard,
   'POST /api/workflow-cards': createWorkflowCard,
+  'POST /api/workflow-attachments': createAttachmentFile,
+  'GET /api/workflow-attachments': listCardAttachments,
+  'PATCH /api/workflow-attachments': attachToCard,
   'PUT /api/agent-instructions': updateAgentInstructions,
   'PUT /api/workflow-instructions': updateWorkflowInstructions,
   'GET /skills/add-to-backlog': getAddToBacklogSkill,
@@ -458,6 +481,116 @@ async function createWorkflowCard(req) {
   }, `No such workflow: ${target}`)
 
   return { status: 201, body: { id: card.id } }
+}
+
+/**
+ * Creates one brand-new, empty `<timestamp>-<name>.md` file under a
+ * project's shared `attachments/` folder (created on demand) — not attached
+ * to any card yet, that's `attachToCard`'s job. Meant to be called by the
+ * `manage-card-attachments` common tool: it hands the caller back both the
+ * project-relative path (what eventually goes in a card's `attachments`) and
+ * a real host path (via MAESTRO_PULSE_HOST_DIR, the same resolution
+ * `getRunManuallySkill` already does for a project's own tools), so an
+ * external harness edits the file directly with its own file tools instead
+ * of piping content through this API.
+ */
+async function createAttachmentFile(req) {
+  const body = await readJson(req)
+  const target = relativePath(body.path)
+  const abs = path.join(ROOT, target)
+
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
+    throw new HttpError(404, `No such workflow: ${target}`)
+  }
+
+  // Not a separate param — a workflow's path is always
+  // `<project>/workflows/<name>`, so the project is fully determined by
+  // `path`; same derivation as getAddToBacklogSkill/getRunManuallySkill.
+  const project = target.split('/').slice(0, -2).join('/')
+  const projectAbs = path.join(ROOT, project)
+  if (!(await isDirectory(projectAbs)) || (await directoryType(projectAbs)) !== 'project') {
+    throw new HttpError(404, `No such project: ${project}`)
+  }
+
+  const originalName = validAttachmentName(body.originalName)
+  const filename = `${timestampPrefix()}-${originalName}`
+  const relPath = join(ATTACHMENTS_SUBDIR, filename)
+
+  await guardFs(async () => {
+    await mkdir(path.join(projectAbs, ATTACHMENTS_SUBDIR), { recursive: true })
+    await writeFile(path.join(projectAbs, ATTACHMENTS_SUBDIR, filename), '')
+  }, `No such workflow: ${target}`)
+
+  const hostPath = MAESTRO_PULSE_HOST_DIR
+    ? path.posix.join(MAESTRO_PULSE_HOST_DIR, 'resources/projects', project, relPath)
+    : null
+
+  return { status: 201, body: { path: relPath, hostPath } }
+}
+
+/**
+ * Reads one card's own `attachments` array — lets a harness check what's
+ * already on a card (e.g. before deciding whether to create a new file or
+ * reuse one) without it ever having to parse `workflow.json` itself.
+ */
+async function listCardAttachments(_req, url) {
+  const target = relativePath(url.searchParams.get('path'))
+  const abs = path.join(ROOT, target)
+
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
+    throw new HttpError(404, `No such workflow: ${target}`)
+  }
+
+  const cardId = validCardId(url.searchParams.get('cardId'))
+  const { cards } = await readWorkflowJson(abs)
+  const card = cards.find((c) => c.id === cardId)
+  if (!card) throw new HttpError(404, `No such card: ${cardId}`)
+
+  return { status: 200, body: { attachments: Array.isArray(card.attachments) ? card.attachments : [] } }
+}
+
+/**
+ * Records one file or URL on a card's `attachments` array — idempotently:
+ * an attachment already on the card is a no-op, not an error, so a harness
+ * can always call this "attach it if it's not attached already" without
+ * checking first. This, not `updateEntry`, is the one narrow way
+ * `workflow.json`'s `attachments` array ever changes, so a harness driving a
+ * card never has to hand-edit that file itself.
+ */
+async function attachToCard(req) {
+  const body = await readJson(req)
+  const target = relativePath(body.path)
+  const abs = path.join(ROOT, target)
+
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
+    throw new HttpError(404, `No such workflow: ${target}`)
+  }
+
+  const project = target.split('/').slice(0, -2).join('/')
+  const cardId = validCardId(body.cardId)
+  const attachment = validAttachmentRef(body.attachment)
+
+  if (!isUrlAttachment(attachment)) {
+    const attAbs = path.join(ROOT, relativePath(join(project, attachment)))
+    if (!(await exists(attAbs))) throw new HttpError(404, `No such attachment file: ${attachment}`)
+  }
+
+  const attachments = await guardFs(async () => {
+    const data = await readWorkflowJson(abs)
+    const index = data.cards.findIndex((c) => c.id === cardId)
+    if (index === -1) throw new HttpError(404, `No such card: ${cardId}`)
+
+    const card = data.cards[index]
+    const existing = Array.isArray(card.attachments) ? card.attachments : []
+    if (existing.includes(attachment)) return existing
+
+    const updated = [...existing, attachment]
+    data.cards[index] = { ...card, attachments: updated }
+    await writeFile(path.join(abs, WORKFLOW_FILE), `${JSON.stringify(data, null, 2)}\n`)
+    return updated
+  }, `No such workflow: ${target}`)
+
+  return { status: 200, body: { path: target, attachments } }
 }
 
 /**
@@ -1264,6 +1397,56 @@ function validCardId(input) {
   if (value.length > MAX_NAME_LENGTH) throw new HttpError(400, 'That cardId is too long')
 
   return value
+}
+
+/** The one predicate that decides which kind an `attachments` entry is —
+ *  nothing else in `workflow.json` records it separately. Mirrored in
+ *  `src/components/CardDetailModal.tsx` since the server code can't import
+ *  that .ts module. */
+const isUrlAttachment = (value) => /^https?:\/\//i.test(value)
+
+/**
+ * What `attachToCard` records on a card: either a bare URL, taken as-is, or
+ * a project-relative path — the caller's job to have gotten that path from
+ * `createAttachmentFile` in the first place, checked to actually exist by
+ * `attachToCard` itself before it's ever written into `workflow.json`.
+ */
+function validAttachmentRef(input) {
+  const value = requiredText(input, 'attachment')
+  if (isUrlAttachment(value)) return value
+  if (!value.startsWith(`${ATTACHMENTS_SUBDIR}/`)) {
+    throw new HttpError(400, `"attachment" must be a URL or a path under ${ATTACHMENTS_SUBDIR}/`)
+  }
+
+  return value
+}
+
+/** Basename-only, `.md`-only — this becomes the tail of a file actually
+ *  written to disk, so it's held to the same shape `validName` holds any
+ *  other created name to. Absent falls back to a generic name, same
+ *  before-this-field-existed-style tolerance other optional fields get. */
+function validAttachmentName(input) {
+  const raw = typeof input === 'string' && input.trim() ? input.trim() : 'attachment.md'
+  const name = path.posix.basename(raw)
+
+  if (!name || name.startsWith('.')) throw new HttpError(400, 'Invalid attachment name')
+  if (/[/\\\0]/.test(name)) throw new HttpError(400, 'Invalid attachment name')
+  if (name.length > MAX_ATTACHMENT_NAME_LENGTH) throw new HttpError(400, 'That attachment name is too long')
+  if (!name.toLowerCase().endsWith('.md')) throw new HttpError(400, 'The attachment must be a .md file')
+
+  return name
+}
+
+/** `YYYYMMDDHHMMSS`, generated server-side (one clock, one format) rather
+ *  than trusting the caller's own — same reasoning `randomUUID()` for a new
+ *  card's id is already server-side. */
+function timestampPrefix() {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return (
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+    `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  )
 }
 
 function requiredText(input, field) {

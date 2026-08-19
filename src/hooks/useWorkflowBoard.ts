@@ -170,6 +170,7 @@ const parseCards = (value: unknown): WorkflowCard[] =>
           status?: unknown
           last_activity?: unknown
           issues?: unknown
+          attachments?: unknown
         }
         return typeof card.id === 'string' && typeof card.title === 'string' && typeof card.column === 'string'
           ? [
@@ -181,6 +182,9 @@ const parseCards = (value: unknown): WorkflowCard[] =>
                 status: card.status === 'in_session' || card.status === 'blocked' ? card.status : null,
                 last_activity: typeof card.last_activity === 'string' ? card.last_activity : null,
                 issues: parseIssues(card.issues),
+                attachments: Array.isArray(card.attachments)
+                  ? card.attachments.filter((a): a is string => typeof a === 'string')
+                  : [],
               },
             ]
           : []

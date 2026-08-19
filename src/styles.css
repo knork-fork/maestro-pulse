@@ -843,6 +843,31 @@ body {
   font-size: 0.92em;
 }
 
+/* A real "Attached" entry — same pill shape as .card-detail__pill, but solid
+   and hover-responsive so it reads as clickable rather than as an empty-state
+   fact. Shared by the link (URL) and button (md file) variants so the two
+   kinds of attachment look the same in the list. */
+.card-detail__attachment {
+  display: block;
+  width: 100%;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  font-size: 0.92em;
+  cursor: pointer;
+}
+
+.card-detail__attachment:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ---- agent view ---- */
 
 /* ---- agent view ----
