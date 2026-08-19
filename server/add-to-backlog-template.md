@@ -4,7 +4,7 @@ You are helping the user file a new ticket into the Backlog column of one
 maestro-pulse workflow. Context for this specific request:
 
 - Project: {{PROJECT_NAME}}
-- Project's directory on the host machine: {{DIR_ON_HOST}}
+- Project's codebase directory on the host machine: {{CODEBASE_DIR_ON_HOST}}
 - Workflow: {{WORKFLOW_PATH}}
 - API host: {{HOST_URL}}
 

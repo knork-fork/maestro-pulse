@@ -30,7 +30,7 @@ const COMMON_TOOLS_ROOT = path.resolve(
 
 /**
  * Absolute path to this maestro-pulse checkout on the host machine — distinct
- * from a project's own `dir_on_host` (the actual codebase being worked on).
+ * from a project's own `codebase_dir_on_host` (the actual codebase being worked on).
  * The container has no other way to trace either `common-tools/` (baked into
  * the image) or a project's own `tools/` (bind-mounted, but the mount's
  * host-side path is otherwise unknown in here) back to a host path. Optional:
@@ -497,9 +497,9 @@ async function getAddToBacklogSkill(req, url) {
     () => readFile(path.join(projectAbs, PROJECT_FILE), 'utf8'),
     `No such project: ${project}`,
   )
-  let dirOnHost
+  let codebaseDirOnHost
   try {
-    dirOnHost = JSON.parse(projectJson).dir_on_host
+    codebaseDirOnHost = JSON.parse(projectJson).codebase_dir_on_host
   } catch {
     throw new HttpError(500, 'project.json is not valid JSON')
   }
@@ -513,7 +513,7 @@ async function getAddToBacklogSkill(req, url) {
   const template = await readFile(ADD_TO_BACKLOG_TEMPLATE, 'utf8')
   const filled = template
     .replaceAll('{{PROJECT_NAME}}', project)
-    .replaceAll('{{DIR_ON_HOST}}', String(dirOnHost))
+    .replaceAll('{{CODEBASE_DIR_ON_HOST}}', String(codebaseDirOnHost))
     .replaceAll('{{HOST_URL}}', host)
     .replaceAll('{{WORKFLOW_PATH}}', target)
     .replaceAll('{{WORKFLOW_INSTRUCTIONS}}', workflowInstructions)
@@ -551,9 +551,9 @@ async function getRunManuallySkill(req, url) {
     () => readFile(path.join(projectAbs, PROJECT_FILE), 'utf8'),
     `No such project: ${project}`,
   )
-  let dirOnHost
+  let codebaseDirOnHost
   try {
-    dirOnHost = JSON.parse(projectJson).dir_on_host
+    codebaseDirOnHost = JSON.parse(projectJson).codebase_dir_on_host
   } catch {
     throw new HttpError(500, 'project.json is not valid JSON')
   }
@@ -628,7 +628,7 @@ async function getRunManuallySkill(req, url) {
   const filled = template
     .replaceAll('{{PROJECT_NAME}}', project)
     .replaceAll('{{PROJECT_JSON}}', projectJson.trim())
-    .replaceAll('{{DIR_ON_HOST}}', String(dirOnHost))
+    .replaceAll('{{CODEBASE_DIR_ON_HOST}}', String(codebaseDirOnHost))
     .replaceAll('{{HOST_URL}}', host)
     .replaceAll('{{WORKFLOW_PATH}}', target)
     .replaceAll('{{CARD_ID}}', cardId)
@@ -652,7 +652,7 @@ async function getRunManuallySkill(req, url) {
  * `hostPathFor` isolates the one difference between the two call sites
  * (common tools resolve under MAESTRO_PULSE_HOST_DIR/common-tools, project
  * tools resolve under MAESTRO_PULSE_HOST_DIR/resources/projects/<project>) —
- * never dir_on_host, which is an unrelated path (see the comment above
+ * never codebase_dir_on_host, which is an unrelated path (see the comment above
  * getRunManuallySkill for why).
  */
 async function readToolsForRunManually(toolsRoot, hostPathFor) {
@@ -811,11 +811,11 @@ async function mkdirTyped(abs, type) {
 async function scaffoldProject(abs, { name, location, description }) {
   await writeFile(
     path.join(abs, PROJECT_FILE),
-    `${JSON.stringify({ dir_on_host: location }, null, 2)}\n`,
+    `${JSON.stringify({ codebase_dir_on_host: location }, null, 2)}\n`,
   )
   await writeFile(
     path.join(abs, PROJECT_FILE_TEMPLATE),
-    `${JSON.stringify({ dir_on_host: '/path/to/project/on/host' }, null, 2)}\n`,
+    `${JSON.stringify({ codebase_dir_on_host: '/path/to/project/on/host' }, null, 2)}\n`,
   )
   await writeFile(path.join(abs, GITIGNORE_FILE), `${PROJECT_FILE}\n`)
   await writeFile(path.join(abs, README_FILE), `# ${name}\n\n${description}\n`)

@@ -22,10 +22,17 @@ A tool is a folder named in kebab-case (`read-from-trello`,
   so a new or edited common tool needs `docker-compose up -d --build` before
   it shows up.
 
-Either way, a `workflow.md` names a tool with its real path so an external
-harness can run it directly: `{{dir_on_host}}/tools/<tool>/tool.sh` for a
-project tool, or `{{maestro_pulse_dir}}/common-tools/<tool>/tool.sh` for a
-common one.
+A tool's real, absolute path on the host is never something a `workflow.md`
+or a tool author constructs — maestro-pulse resolves it automatically and
+hands it to whichever external agent picks up a card (see the run-manually
+and add-to-backlog skills in `server/index.mjs`). That path is always rooted
+at `MAESTRO_PULSE_HOST_DIR`, the maestro-pulse checkout's own absolute path
+on the host — never at a project's `codebase_dir_on_host`, which is a
+different, unrelated path (the actual codebase's own git checkout; see
+`project.json`). A project-scoped tool resolves under this checkout's own
+`resources/projects/<project>/tools/<tool>/tool.sh`; a common tool resolves
+under `common-tools/<tool>/tool.sh`. A `workflow.md` only needs to name which
+tool to use — not build its path.
 
 ## The required folder shape
 

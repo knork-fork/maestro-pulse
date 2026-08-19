@@ -137,7 +137,7 @@ can hand an external agent a real, runnable path to a tool's `tool.sh`.
 `MAESTRO_PULSE_HOST_DIR`, an optional env var set in
 [docker-compose.yml](docker-compose.yml), answers that: the absolute path to
 this maestro-pulse checkout on the host. It is deliberately a separate
-concept from a project's own `dir_on_host` — that path answers an unrelated
+concept from a project's own `codebase_dir_on_host` — that path answers an unrelated
 question (where the actual codebase being worked on lives), and must never be
 used to build a tool path.
 
@@ -436,7 +436,7 @@ never computes it at all. The browser's own host is likewise not a param —
 the server reads it off the proxied request's own `Host` header instead (see
 nginx's `proxy_set_header Host $host`). The route
 returns [add-to-backlog-template.md](server/add-to-backlog-template.md) with
-its placeholders swapped for that project's real name, its `dir_on_host`
+its placeholders swapped for that project's real name, its `codebase_dir_on_host`
 (from `project.json`), that host, and the workflow's own `workflow.md`
 content (empty/missing renders as nothing, so the template reads cleanly
 either way) — as raw markdown, not JSON, the one route in this API that isn't.
@@ -485,8 +485,8 @@ project's own `tools/` folder (e.g. `"tools/read-from-trello"`) — no other
 metadata travels with them. `tools/` is one of every project's
 `PROJECT_SUBDIRECTORIES`, but — unlike `agents/`/`workflows/` — nothing
 inside it is a marked/creatable type; a tool is a plain subfolder holding
-`tool.sh` plus `.env`/`.env.local` (a project store's own CLAUDE.md, e.g.
-`resources/projects/giscloud/CLAUDE.md`, documents that convention in full —
+`tool.sh` plus `.env`/`.env.local` ([docs/tools/README.md](docs/tools/README.md)
+documents that convention in full, for a human or an AI agent authoring one —
 maestro-pulse itself never reads those three) and `tool.json`
 (`{title, description, icon}`, parsed by
 [src/data/tool.ts](src/data/tool.ts)), picked up the same "no dedicated list

@@ -5,7 +5,7 @@ workflow, standing in for the automated bot column it lives in. Context for
 this specific request:
 
 - Project: {{PROJECT_NAME}}
-- Project's directory on the host machine (its own git checkout): {{DIR_ON_HOST}}
+- Project's codebase directory on the host machine (its own git checkout): {{CODEBASE_DIR_ON_HOST}}
 - This project's maestro-pulse store folder on the host (where its tools/agents/workflows live): {{PROJECT_HOST_DIR}}
 - Workflow: {{WORKFLOW_PATH}}
 - API host: {{HOST_URL}}
