@@ -14,7 +14,10 @@ type Props = {
  * (`api.fetchFile`), through the same `SafeMarkdown` the card's own
  * Description already renders with. "Copy raw to clipboard" copies the
  * fetched text as-is, not the rendered DOM, mirroring
- * AddToBacklogModal/RunManuallyModal's copy-button + "Copied" toggle.
+ * AddToBacklogModal/RunManuallyModal's copy-button + "Copied" toggle. The
+ * top-left "Back to card" control is just another `onCancel` trigger (as are
+ * Close, Escape, and the backdrop) — it exists to read as a step back rather
+ * than a dismissal, not to behave differently.
  */
 export function AttachmentViewModal({ path, onCancel }: Props) {
   const [content, setContent] = useState<string | null>(null)
@@ -45,7 +48,17 @@ export function AttachmentViewModal({ path, onCancel }: Props) {
   }
 
   return (
-    <Modal title={path.split('/').pop() ?? path} wide className="modal__panel--attachment" onCancel={onCancel}>
+    <Modal
+      title={path.split('/').pop() ?? path}
+      wide
+      className="modal__panel--attachment"
+      onCancel={onCancel}
+      beforeTitle={
+        <button type="button" className="modal__back" onClick={onCancel}>
+          ← Back to card
+        </button>
+      }
+    >
       {error && (
         <p className="modal__message" role="alert">
           {error}

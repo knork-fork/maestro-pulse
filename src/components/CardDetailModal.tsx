@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { WorkflowCard } from '../data/api'
 import { SafeMarkdown } from '../views/MarkdownView'
 import { AttachmentViewModal } from './AttachmentViewModal'
@@ -52,15 +52,42 @@ export function CardDetailModal({ card, bot, workflowPath, onCancel, onRunManual
   const [viewingAttachment, setViewingAttachment] = useState<string | null>(null)
   const projectPath = projectPathOf(workflowPath)
 
+  const [descExpanded, setDescExpanded] = useState(false)
+  const [descOverflows, setDescOverflows] = useState(false)
+  const descRef = useRef<HTMLDivElement>(null)
+
+  // Measured once against the collapsed height, before the user can expand
+  // it — so "See more" only appears when there's actually more to see.
+  useLayoutEffect(() => {
+    const el = descRef.current
+    setDescOverflows(el !== null && el.scrollHeight > el.clientHeight)
+  }, [])
+
   return (
     <Modal title={card.title} wide className="modal__panel--card-detail" onCancel={onCancel}>
       <p className="card-detail__meta">In {card.column}</p>
 
       <div className="card-detail__section">
         <h3 className="card-detail__section-title">Description</h3>
-        <div className="markdown">
+        <div
+          ref={descRef}
+          className={
+            descExpanded
+              ? 'markdown'
+              : 'markdown card-detail__description--collapsed'
+          }
+        >
           <SafeMarkdown content={card.description} />
         </div>
+        {descOverflows && (
+          <button
+            type="button"
+            className="card-detail__see-more"
+            onClick={() => setDescExpanded((v) => !v)}
+          >
+            {descExpanded ? 'See less' : 'See more'}
+          </button>
+        )}
       </div>
 
       <div className="card-detail__unboxed">

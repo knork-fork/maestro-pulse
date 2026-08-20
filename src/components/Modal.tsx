@@ -9,6 +9,9 @@ type Props = {
   wide?: boolean
   /** For a caller needing a panel width of its own, beyond `wide`'s step. */
   className?: string
+  /** Rendered above the title — e.g. a "back" control for a modal opened from
+   *  within another, so it reads as a step back rather than a new dismissal. */
+  beforeTitle?: ReactNode
   onCancel: () => void
   children: ReactNode
 }
@@ -18,7 +21,7 @@ type Props = {
  * Escape to cancel. Its content — including the action buttons, which belong to
  * whatever the dialog is asking — is the caller's.
  */
-export function Modal({ title, wide = false, className, onCancel, children }: Props) {
+export function Modal({ title, wide = false, className, beforeTitle, onCancel, children }: Props) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onCancel()
@@ -38,6 +41,7 @@ export function Modal({ title, wide = false, className, onCancel, children }: Pr
         aria-label={title}
         onPointerDown={(event) => event.stopPropagation()}
       >
+        {beforeTitle}
         <h2 className="modal__title">{title}</h2>
         {children}
       </div>

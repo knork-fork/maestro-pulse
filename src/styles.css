@@ -795,6 +795,40 @@ body {
 .card-detail__section .markdown > :first-child { margin-top: 0; }
 .card-detail__section .markdown > :last-child { margin-bottom: 0; }
 
+/* Truncates a long rendered Description to a fixed height, with a fade into
+   the section's own background so the cut reads as "more below" rather than
+   a hard clip. Paired with .card-detail__see-more, only shown when a
+   measurement of the rendered content finds it actually overflows. */
+.card-detail__description--collapsed {
+  max-height: 220px;
+  overflow: hidden;
+  position: relative;
+}
+
+.card-detail__description--collapsed::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
+  background: linear-gradient(to bottom, transparent, var(--input-bg));
+  pointer-events: none;
+}
+
+.card-detail__see-more {
+  display: block;
+  margin: 8px 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-hover);
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.card-detail__see-more:hover { text-decoration: underline; }
+
 .card-detail__meta {
   margin: -6px 0 12px;
   color: var(--text-dim);
@@ -1484,6 +1518,23 @@ body {
   color: #ededf0;
   overflow-wrap: anywhere;
 }
+
+/* An optional step-back control above the title, e.g. AttachmentViewModal's
+   "Back to card" — same dismissive action as Close/Escape/the backdrop, just
+   styled to read as navigation rather than a dismissal. */
+.modal__back {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.modal__back:hover { color: var(--accent-hover); }
 
 .modal__message {
   margin: 0;
