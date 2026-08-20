@@ -45,7 +45,7 @@ export function CardDetailModal({ card, bot, workflowPath, onCancel, onRunManual
   const projectPath = projectPathOf(workflowPath)
 
   return (
-    <Modal title={card.title} wide onCancel={onCancel}>
+    <Modal title={card.title} wide className="modal__panel--card-detail" onCancel={onCancel}>
       <p className="card-detail__meta">In {card.column}</p>
 
       <div className="card-detail__section">
