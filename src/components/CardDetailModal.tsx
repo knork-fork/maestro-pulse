@@ -20,6 +20,14 @@ type Props = {
  *  server/index.mjs uses server-side. */
 const isUrlAttachment = (value: string) => /^https?:\/\//i.test(value)
 
+/** A `.md` attachment is named `<14-digit-timestamp>-<original name>` (see
+ *  `timestampPrefix`/`createAttachmentFile` in server/index.mjs) — stripped
+ *  here for display; the full name (with timestamp) is still shown on hover.
+ *  Only `.md` names get this treatment, so an unrelated file extension isn't
+ *  mistaken for a timestamped attachment. */
+const stripAttachmentTimestamp = (name: string) =>
+  name.endsWith('.md') ? name.replace(/^\d{14}-/, '') : name
+
 /** A workflow's path is always `<project>/workflows/<name>` — exactly two
  *  fixed segments below its project, the same rule
  *  AddToBacklogModal/RunManuallyModal already rely on for their own skill
@@ -100,9 +108,10 @@ export function CardDetailModal({ card, bot, workflowPath, onCancel, onRunManual
                   <button
                     type="button"
                     className="card-detail__attachment"
+                    title={attachment.split('/').pop()}
                     onClick={() => setViewingAttachment(`${projectPath}/${attachment}`)}
                   >
-                    {attachment.split('/').pop()}
+                    {stripAttachmentTimestamp(attachment.split('/').pop() ?? '')}
                   </button>
                 )}
               </li>
