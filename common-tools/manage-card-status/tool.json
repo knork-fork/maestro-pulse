@@ -1,5 +1,5 @@
 {
   "title": "Manage Card Status",
   "description": "Mark a card as in_session when taking it on, and clear that mark when done, on a maestro-pulse workflow board.",
-  "icon": "board"
+  "icon": "maestro"
 }

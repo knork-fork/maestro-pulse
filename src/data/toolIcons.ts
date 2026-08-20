@@ -12,6 +12,7 @@ import {
   GoogleDriveIcon,
   JiraIcon,
   ListIcon,
+  MaestroIcon,
   MoveIcon,
   OutlineIcon,
   PencilIcon,
@@ -45,6 +46,7 @@ export type ToolIconType =
   | 'gitlab'
   | 'jira'
   | 'discord'
+  | 'maestro'
   | 'wrench'
 
 export type ToolLook = { Icon: ComponentType<{ className?: string }>; tint: string }
@@ -70,6 +72,7 @@ export const TOOL_ICON_LOOKS: Record<ToolIconType, ToolLook> = {
   gitlab: { Icon: GitLabIcon, tint: 'var(--danger)' },
   jira: { Icon: JiraIcon, tint: 'var(--accent)' },
   discord: { Icon: DiscordIcon, tint: 'var(--accent)' },
+  maestro: { Icon: MaestroIcon, tint: 'var(--accent)' },
   wrench: { Icon: WrenchIcon, tint: 'var(--icon)' },
 }
 

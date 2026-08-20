@@ -389,6 +389,23 @@ export function DiscordIcon({ className }: IconProps) {
   )
 }
 
+/** Unlike the other classified icons, this one is a filled glyph rather than
+ *  a stroked line icon, so it overrides the shared `.agent-view__tool-icon`
+ *  rule (fill: none; stroke: var(--tool-tint)) the same way the brand icons
+ *  above do — but fills with `--tool-tint` itself rather than a fixed brand
+ *  color, since it stays part of the tinted vocabulary, not a logo. */
+export function MaestroIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        fillRule="evenodd"
+        d="M4.35 7.45 C3.65 6.45 3.35 5.35 3.55 4.25 C3.9 2.25 5.75 0.65 7.95 0.65 C10.2 0.65 11.95 2.15 12.35 4.15 L12.45 5.75 L12.65 6.35 L12.45 6.75 L12.25 6.95 L12.75 8.8 C12.85 9.15 12.65 9.3 12.35 9.4 L11.8 9.55 L11.25 11.7 C11.15 12.05 10.95 12.2 10.6 12.2 L9.9 12.2 L7.2 10.2 L6.75 8.35 L6.45 8.55 L6.95 10.45 L9.65 12.45 L9.25 14.35 L10.15 16 H8.15 L3.55 12.35 L3.9 12.05 V8.95 L4.35 8.6 Z"
+        style={{ fill: 'var(--tool-tint, var(--icon))', stroke: 'none' }}
+      />
+    </svg>
+  )
+}
+
 /** Marks a toolkit tile from the common, always-on catalog — see ToolTile.tsx. */
 export function LockIcon({ className }: IconProps) {
   return (

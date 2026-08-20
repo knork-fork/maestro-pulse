@@ -1,5 +1,5 @@
 {
   "title": "Manage Card Attachments",
   "description": "Create a timestamped attachment file already attached to a card and ready to edit, list what's attached with a real editable path per file, add a URL, or remove an existing attachment",
-  "icon": "file"
+  "icon": "maestro"
 }
