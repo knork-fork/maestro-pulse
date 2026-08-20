@@ -657,9 +657,13 @@ async function detachFromCard(_req, url) {
 /**
  * Hands an external Claude Code session the "add a backlog ticket" skill:
  * `add-to-backlog-template.md` with its placeholders swapped for the real
- * project/workflow it was asked about. `project` is required and checked
- * independently of `path` (rather than inferred from `path`'s first segment)
- * so the two can't silently disagree about which project this is for.
+ * project/workflow it was asked about. Mirrors getRunManuallySkill's shape:
+ * the same three host roots declared once (maestro_pulse_root,
+ * project_store_dir, project_codebase_dir), a tool catalog listed as paths
+ * relative to those roots, and `workflow.md` content pasted in as a
+ * blockquote. Unlike run-manually, there's no card or agent yet at this
+ * stage, so the project-tools catalog is every tool under the project's own
+ * `tools/`, unfiltered, rather than one agent's selected subset.
  * Returns raw markdown, not JSON, so a plain fetch/WebFetch reads it directly.
  */
 async function getAddToBacklogSkill(req, url) {
@@ -698,19 +702,44 @@ async function getAddToBacklogSkill(req, url) {
     throw new HttpError(500, 'project.json is not valid JSON')
   }
 
-  const rawInstructions = await readFile(path.join(abs, WORKFLOW_INSTRUCTIONS_FILE), 'utf8').catch(() => '')
-  const trimmedInstructions = rawInstructions.trim()
-  const workflowInstructions = trimmedInstructions
-    ? `----\n\n${trimmedInstructions}\n`
-    : ''
+  const workflowInstructions = await readFile(path.join(abs, WORKFLOW_INSTRUCTIONS_FILE), 'utf8').catch(() => '')
+
+  const projectHostDir = MAESTRO_PULSE_HOST_DIR
+    ? path.posix.join(MAESTRO_PULSE_HOST_DIR, 'resources/projects', project)
+    : null
+  const hostDirUnresolved = '(not resolved — MAESTRO_PULSE_HOST_DIR is not set on the api container; relative paths below cannot be resolved to real host paths)'
+
+  const hostRootsList = renderKeyValueList([
+    ['maestro_pulse_root', MAESTRO_PULSE_HOST_DIR ?? hostDirUnresolved],
+    ['project_store_dir', projectHostDir ?? hostDirUnresolved],
+    ['project_codebase_dir', codebaseDirOnHost ?? '(missing from project.json)'],
+  ])
+
+  const commonTools = await readToolCatalog(COMMON_TOOLS_ROOT)
+  const commonToolsList = commonTools.length
+    ? renderKeyValueList(
+        commonTools.map((tool) => [path.posix.join('common-tools', tool.name, 'tool.sh'), tool.description]),
+      )
+    : '_None._'
+
+  // Unlike run-manually, there's no agent yet at this stage to scope a
+  // "selected tools" list by — every one of the project's own tools is
+  // listed, unfiltered.
+  const projectTools = await readToolCatalog(path.join(projectAbs, 'tools'))
+  const projectToolsList = projectTools.length
+    ? renderKeyValueList(projectTools.map((tool) => [path.posix.join('tools', tool.name, 'tool.sh'), tool.description]))
+    : '_None._'
 
   const template = await readFile(ADD_TO_BACKLOG_TEMPLATE, 'utf8')
   const filled = template
     .replaceAll('{{PROJECT_NAME}}', project)
-    .replaceAll('{{CODEBASE_DIR_ON_HOST}}', String(codebaseDirOnHost))
+    .replaceAll('{{HOST_ROOTS_LIST}}', hostRootsList)
     .replaceAll('{{HOST_URL}}', host)
     .replaceAll('{{WORKFLOW_PATH}}', target)
-    .replaceAll('{{WORKFLOW_INSTRUCTIONS}}', workflowInstructions)
+    .replaceAll('{{COMMON_TOOLS_LIST}}', commonToolsList)
+    .replaceAll('{{PROJECT_TOOLS_LIST}}', projectToolsList)
+    .replaceAll('{{ATTACH_TOOL_ABS_PATH}}', hostAbsoluteToolPath('manage-card-attachments'))
+    .replaceAll('{{WORKFLOW_INSTRUCTIONS}}', blockquote(workflowInstructions.trim()))
 
   return { status: 200, body: filled, raw: true }
 }
@@ -813,7 +842,7 @@ async function getRunManuallySkill(req, url) {
     ? renderKeyValueList(cardAttachments.map((attachment, i) => [i + 1, attachment]))
     : '_None._'
 
-  const commonTools = await readToolsForRunManually(COMMON_TOOLS_ROOT)
+  const commonTools = await readToolCatalog(COMMON_TOOLS_ROOT)
   const commonToolsList = commonTools.length
     ? renderKeyValueList(
         commonTools.map((tool) => [path.posix.join('common-tools', tool.name, 'tool.sh'), tool.description]),
@@ -866,10 +895,10 @@ async function getRunManuallySkill(req, url) {
 }
 
 /**
- * Absolute host path to a named common tool's tool.sh, for the two
- * ready-to-run example commands in the "Card actions" section — the one
- * deliberate exception to every other tool/attachment being listed as a
- * relative path (see getRunManuallySkill).
+ * Absolute host path to a named common tool's tool.sh, for the ready-to-run
+ * example commands both skill templates' "Card actions" sections give —
+ * the one deliberate exception to every other tool/attachment being listed
+ * as a relative path (see getRunManuallySkill / getAddToBacklogSkill).
  */
 function hostAbsoluteToolPath(toolName) {
   return MAESTRO_PULSE_HOST_DIR
@@ -878,11 +907,14 @@ function hostAbsoluteToolPath(toolName) {
 }
 
 /**
- * A common tool's own name + description, read from its tool.json. Callers
- * build the relative path themselves — common tools and project tools join
- * under different roots (see getRunManuallySkill).
+ * A tool's own name + description, read from its tool.json. Shared by both
+ * skill endpoints for every catalog they list (common tools, and either an
+ * agent's selected project tools or, for add-to-backlog, every project tool
+ * unfiltered). Callers build the relative path themselves — common tools and
+ * project tools join under different roots (see getRunManuallySkill /
+ * getAddToBacklogSkill).
  */
-async function readToolsForRunManually(toolsRoot) {
+async function readToolCatalog(toolsRoot) {
   const entries = await readdir(toolsRoot, { withFileTypes: true }).catch(() => [])
   const folders = entries.filter((entry) => entry.isDirectory())
   return Promise.all(
@@ -929,8 +961,9 @@ function renderIssueList(issues) {
 /**
  * Quotes a block of markdown (an agent's/workflow's own free-text
  * instructions) with `>` so any heading inside it renders visually and
- * structurally apart from the run-manually template's own section headings,
- * rather than blending into the same heading scheme.
+ * structurally apart from the enclosing skill template's own section
+ * headings, rather than blending into the same heading scheme. Shared by
+ * both getRunManuallySkill and getAddToBacklogSkill.
  */
 function blockquote(text) {
   if (!text) return '_None._'

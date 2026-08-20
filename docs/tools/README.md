@@ -101,8 +101,11 @@ to fall back to the same thing.
    value, and put the real ones in `.env.local`.
 4. Write `tool.json` — title, description, and a pick from the icon
    vocabulary above.
-5. Name the tool in whichever `workflow.md` should reach for it — a tool
-   nothing references will not get used.
+5. That's it for discoverability — run-manually and add-to-backlog both list
+   every tool automatically (see the "run-manually and add-to-backlog skills"
+   reference above), so a new tool is visible without `workflow.md` naming it.
+   Only add a mention in `workflow.md` when the workflow's own sequencing
+   depends on using this specific tool for a specific step.
 
 If the tool belongs under `common-tools/` instead of a project's `tools/`,
 run `docker-compose up -d --build` afterwards so the api image picks it up.

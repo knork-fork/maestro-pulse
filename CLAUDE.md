@@ -482,10 +482,16 @@ never computes it at all. The browser's own host is likewise not a param —
 the server reads it off the proxied request's own `Host` header instead (see
 nginx's `proxy_set_header Host $host`). The route
 returns [add-to-backlog-template.md](server/add-to-backlog-template.md) with
-its placeholders swapped for that project's real name, its `codebase_dir_on_host`
-(from `project.json`), that host, and the workflow's own `workflow.md`
-content (empty/missing renders as nothing, so the template reads cleanly
-either way) — as raw markdown, not JSON, the one route in this API that isn't.
+its placeholders swapped for that project's real name, that host, and the
+workflow's own `workflow.md` content — blockquoted, and preceded by the same
+three declared host roots and tool-catalog shape `GET /skills/run-manually`
+below uses (see that entry for the shared mechanics, including
+`manage-card-attachments`'s path being resolved in full the same way, for its
+own ready-to-run attachment commands); the one difference is that there's no
+card or agent yet at this stage, so its project-tools catalog is every tool
+under the project's own `tools/`, unfiltered, rather than one agent's
+selected subset — as raw markdown, not JSON, the one route in this API that
+isn't.
 
 `GET /skills/run-manually` (`getRunManuallySkill`) follows the identical
 project/workflow validation shape, taking `path` plus a `card` param naming
