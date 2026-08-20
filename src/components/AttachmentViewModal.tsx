@@ -45,7 +45,7 @@ export function AttachmentViewModal({ path, onCancel }: Props) {
   }
 
   return (
-    <Modal title={path.split('/').pop() ?? path} wide onCancel={onCancel}>
+    <Modal title={path.split('/').pop() ?? path} wide className="modal__panel--attachment" onCancel={onCancel}>
       {error && (
         <p className="modal__message" role="alert">
           {error}
