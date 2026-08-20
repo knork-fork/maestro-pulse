@@ -74,7 +74,9 @@ export function CardDetailModal({ card, bot, workflowPath, onCancel, onRunManual
           className={
             descExpanded
               ? 'markdown'
-              : 'markdown card-detail__description--collapsed'
+              : `markdown card-detail__description--collapsed${
+                  descOverflows ? ' card-detail__description--overflows' : ''
+                }`
           }
         >
           <SafeMarkdown content={card.description} />

@@ -805,7 +805,7 @@ body {
   position: relative;
 }
 
-.card-detail__description--collapsed::after {
+.card-detail__description--collapsed.card-detail__description--overflows::after {
   content: '';
   position: absolute;
   left: 0;
