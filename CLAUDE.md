@@ -50,7 +50,7 @@ dependency-free Node API that owns the folder tree.
 |---------|------|
 | Pane composition, and the tree state the panes share | [src/App.tsx](src/App.tsx) |
 | React entry point / root mount | [src/main.tsx](src/main.tsx) |
-| HTML shell Vite builds from | [index.html](index.html) |
+| HTML shell Vite builds from, and the static favicon Vite copies in as-is | [index.html](index.html), [public/favicon.ico](public/favicon.ico) |
 | **Backend** — every filesystem read and write, and the rules for them | [server/index.mjs](server/index.mjs) |
 | Left sidebar — composition, plus the draft row and dialogs in flight | [src/components/ProjectsSidebar.tsx](src/components/ProjectsSidebar.tsx) |
 | Tree state — nodes, expansion, selection, and the mutations | [src/hooks/useProjectTree.ts](src/hooks/useProjectTree.ts) |
@@ -173,6 +173,13 @@ panes read it: the sidebar browses and mutates the tree, and the main pane shows
 whatever is selected in it. The selection is a *path*, resolved against the current
 nodes on every render, which is what makes a stale one harmless — a path that stops
 resolving falls back to the empty state without anyone clearing it.
+
+The browser tab title is likewise derived in [App.tsx](src/App.tsx), from the
+same `nodes`/`selectedPath`: `projectNameForPath` in
+[tree.ts](src/data/tree.ts) walks the selected path (unwrapping a board/agent-
+view path first) to find its nearest `project` ancestor, and the effect sets
+`document.title` to that project's name, or the app's own name when nothing
+resolves to one.
 
 Which files can be opened at all, and what renders each, is decided in one place:
 [views/registry.ts](src/views/registry.ts). A view is a matcher plus a renderer,

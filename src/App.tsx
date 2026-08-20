@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { MainPane } from './components/MainPane'
 import { ProjectsSidebar } from './components/ProjectsSidebar'
 import { SessionsSidebar } from './components/SessionsSidebar'
+import { projectNameForPath } from './data/tree'
 import { useProjectTree } from './hooks/useProjectTree'
 
 /**
@@ -10,6 +12,11 @@ import { useProjectTree } from './hooks/useProjectTree'
  */
 export default function App() {
   const tree = useProjectTree()
+
+  useEffect(() => {
+    const projectName = tree.selectedPath ? projectNameForPath(tree.nodes, tree.selectedPath) : null
+    document.title = projectName ? `${projectName} — MaestroPulse` : 'MaestroPulse'
+  }, [tree.nodes, tree.selectedPath])
 
   return (
     <div className="app">

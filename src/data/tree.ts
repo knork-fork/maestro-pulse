@@ -145,6 +145,28 @@ const filterChildren = (nodes: TreeNode[], q: string): TreeNode[] =>
   })
 
 /**
+ * The name of the `project` a path lives under, or null if it isn't under one
+ * (or doesn't resolve at all) — used for the browser tab title. Walks the same
+ * way `locate` does, but tracks the nearest `project` ancestor seen along the
+ * way rather than stopping at the immediate parent; a board/agent-view path
+ * is unwrapped to its real, locatable path first.
+ */
+export const projectNameForPath = (nodes: TreeNode[], path: string): string | null => {
+  const realPath = parseBoardPath(path) ?? parseAgentViewPath(path) ?? path
+
+  let siblings = nodes
+  let projectName: string | null = null
+  for (const segment of realPath.split('/')) {
+    const found = siblings.find((node) => node.name === segment)
+    if (!found) return projectName
+    if (found.type === 'project') projectName = found.name
+    if (found.type === 'file') return projectName
+    siblings = found.children
+  }
+  return projectName
+}
+
+/**
  * Every path in `nodes` that can be expanded, so a filtered tree can default to
  * showing its matches without anyone having manually expanded the folders
  * leading to them.
