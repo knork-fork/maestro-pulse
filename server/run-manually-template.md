@@ -76,6 +76,22 @@ Use this to move this card to any column by name (when and where to move it come
 {{MOVE_CARD_TOOL_ABS_PATH}} "{{WORKFLOW_PATH}}" "{{CARD_ID}}" "<target column name>"
 ```
 
+### Marking this card in session
+
+Use `manage-card-status` (from the common tools above) to mark that you've
+taken on this card, so anyone looking at the board can tell it's actively
+being worked:
+
+```
+{{CARD_STATUS_TOOL_ABS_PATH}} "{{WORKFLOW_PATH}}" "{{CARD_ID}}" in_session
+```
+
+Clear it once you're done — omit the status to clear it:
+
+```
+{{CARD_STATUS_TOOL_ABS_PATH}} "{{WORKFLOW_PATH}}" "{{CARD_ID}}"
+```
+
 ### Managing this card's attachments
 
 Use `manage-card-attachments` (from the common tools above) to create, list,

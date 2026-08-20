@@ -561,13 +561,23 @@ builds for a project's own catalog, so both render through the same
 `ToolCatalogEntry` type and the same tile component.
 
 A card's own `column` can be set to any column, not just an adjacent one, via
-the `move-to` action on `PATCH /api/workflow-cards` — the one card action the
-UI itself never sends. Every other action (`move-up`/`move-down`/
-`move-right`/`delete`/`archive`) is validated against the card's current
-column position and a bot column's lock; `move-to` skips all of that and only
-checks the named column exists, since it exists for a tool/agent driving the
-board directly (see `common-tools/move-maestro-pulse-card/`) rather than a
-person clicking through it.
+the `move-to` action on `PATCH /api/workflow-cards` — one of two card actions
+the UI itself never sends (`set-status`, below, is the other). Every other
+action (`move-up`/`move-down`/`move-right`/`delete`/`archive`) is validated
+against the card's current column position and a bot column's lock;
+`move-to` skips all of that and only checks the named column exists, since
+it exists for a tool/agent driving the board directly (see
+`common-tools/move-maestro-pulse-card/`) rather than a person clicking
+through it.
+
+A card's own `status` is set/cleared the same tool-driven way, via the
+`set-status` action (`validCardStatus`/`CARD_STATUSES` in
+[server/index.mjs](server/index.mjs)) and `common-tools/manage-card-status/`.
+Only `in_session` is exposed this way — `blocked` is rendered by the board
+(see [src/styles.css](src/styles.css)) but intentionally has no write path
+yet. `move-right`, `move-to` and `set-status` also stamp `last_activity`
+distinguishing human- from tool-driven actions; pure reordering
+(`move-up`/`move-down`) and removal (`delete`/`archive`) don't touch it.
 
 A file's contents cross the wire as text wrapped in JSON, because the API has no
 non-JSON response path. The read is capped and refuses anything that is not a

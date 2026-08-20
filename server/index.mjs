@@ -75,13 +75,21 @@ const MAX_COLUMN_NAME_LENGTH = 60
  * A card's own actions, applied one at a time by `PATCH /api/workflow-cards`.
  * None of them grow `cards` — move/delete/archive only reorder, relabel,
  * shrink, or transfer to `archived` — so unlike columns there is no length
- * cap to enforce here. `move-to` is the one action the UI never sends: it
- * names an arbitrary destination column and skips every restriction the
- * other moves enforce (adjacency, bot-column lock, Backlog/Done position) —
- * meant for a tool/agent driving the board directly, not a person clicking
- * through it.
+ * cap to enforce here. `move-to` and `set-status` are the two actions the UI
+ * never sends: `move-to` names an arbitrary destination column and skips
+ * every restriction the other moves enforce (adjacency, bot-column lock,
+ * Backlog/Done position); `set-status` sets or clears a card's own `status`
+ * with no column gating at all. Both are meant for a tool/agent driving the
+ * board directly, not a person clicking through it.
  */
-const CARD_ACTIONS = ['move-up', 'move-down', 'move-right', 'move-to', 'delete', 'archive']
+const CARD_ACTIONS = ['move-up', 'move-down', 'move-right', 'move-to', 'set-status', 'delete', 'archive']
+
+/**
+ * The closed set of values `set-status` accepts. `'blocked'` is a real value
+ * the board already renders (see styles.css's `card--status-blocked`) but
+ * nothing writes it yet — deliberately excluded here until that's built.
+ */
+const CARD_STATUSES = ['in_session']
 
 /**
  * Where a card's md/url attachments live — one folder shared by every
@@ -445,10 +453,11 @@ async function updateWorkflowCard(req) {
   const cardId = validCardId(body.cardId)
   const action = validCardAction(body.action)
   const targetColumn = action === 'move-to' ? requiredText(body.column, 'column') : undefined
+  const statusValue = action === 'set-status' ? validCardStatus(body.status) : undefined
 
   await guardFs(async () => {
     const data = await readWorkflowJson(abs)
-    const updated = applyCardAction(data, cardId, action, targetColumn)
+    const updated = applyCardAction(data, cardId, action, targetColumn, statusValue)
     await writeFile(path.join(abs, WORKFLOW_FILE), `${JSON.stringify(updated, null, 2)}\n`)
   }, `No such workflow: ${target}`)
 
@@ -851,6 +860,7 @@ async function getRunManuallySkill(req, url) {
     .replaceAll('{{PROJECT_TOOLS_LIST}}', projectToolsList)
     .replaceAll('{{MOVE_CARD_TOOL_ABS_PATH}}', hostAbsoluteToolPath('move-maestro-pulse-card'))
     .replaceAll('{{ATTACH_TOOL_ABS_PATH}}', hostAbsoluteToolPath('manage-card-attachments'))
+    .replaceAll('{{CARD_STATUS_TOOL_ABS_PATH}}', hostAbsoluteToolPath('manage-card-status'))
 
   return { status: 200, body: filled, raw: true }
 }
@@ -1177,7 +1187,7 @@ function describeSetting(value, descriptions) {
  * found by position (Backlog is index 0, Done is the last index), the same
  * rule scaffoldWorkflow's assembly and validColumn already rely on.
  */
-function applyCardAction(data, cardId, action, targetColumnName) {
+function applyCardAction(data, cardId, action, targetColumnName, statusValue) {
   const { columns, cards } = data
   const index = cards.findIndex((card) => card.id === cardId)
   if (index === -1) throw new HttpError(404, `No such card: ${cardId}`)
@@ -1201,8 +1211,15 @@ function applyCardAction(data, cardId, action, targetColumnName) {
     case 'move-to': {
       const target = columns.find((column) => column.name === targetColumnName)
       if (!target) throw new HttpError(400, `No such column: ${targetColumnName}`)
-      const moved = { ...card, column: target.name, last_activity: `moved to ${target.name} by tool` }
+      const moved = { ...card, column: target.name, last_activity: `Agent moved the card to ${target.name} column` }
       return { ...data, cards: cards.map((c, i) => (i === index ? moved : c)) }
+    }
+    case 'set-status': {
+      const { status: _status, ...withoutStatus } = card
+      const updated = statusValue
+        ? { ...card, status: statusValue, last_activity: `Agent marked the card as ${statusValue}` }
+        : { ...withoutStatus, last_activity: 'Agent cleared the card status' }
+      return { ...data, cards: cards.map((c, i) => (i === index ? updated : c)) }
     }
     case 'delete':
       if (columnIdx !== 0) throw new HttpError(400, 'Only a Backlog card can be deleted')
@@ -1248,7 +1265,7 @@ function moveRight(cards, index, columns, columnIdx) {
   const target = columns[columnIdx + 1]
   if (!target) throw new HttpError(400, 'There is no column to the right')
 
-  const card = { ...cards[index], column: target.name, last_activity: `moved to ${target.name} by user` }
+  const card = { ...cards[index], column: target.name, last_activity: `User moved the card to ${target.name} column` }
   const withoutCard = cards.filter((_, i) => i !== index)
 
   let insertAt = withoutCard.length
@@ -1502,6 +1519,17 @@ function validCardId(input) {
   if (value.length > MAX_NAME_LENGTH) throw new HttpError(400, 'That cardId is too long')
 
   return value
+}
+
+/** `undefined`/`null` both mean "clear the status" — a caller may omit the
+ *  key entirely rather than send it explicitly. */
+function validCardStatus(input) {
+  if (input === null || input === undefined) return null
+  if (!CARD_STATUSES.includes(input)) {
+    throw new HttpError(400, `"status" must be one of: ${CARD_STATUSES.join(', ')}`)
+  }
+
+  return input
 }
 
 /** The one predicate that decides which kind an `attachments` entry is —
