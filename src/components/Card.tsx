@@ -63,7 +63,7 @@ export function Card({
         )}
       </div>
 
-      <button type="button" className="card__title" onClick={onOpen}>
+      <button type="button" className="card__title" title={card.title} onClick={onOpen}>
         {card.title}
       </button>
 
