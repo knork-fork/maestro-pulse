@@ -5,17 +5,13 @@ workflow, standing in for the automated bot column it lives in. Context for
 this specific request:
 
 - Project: {{PROJECT_NAME}}
-- Project's codebase directory on the host machine (its own git checkout): {{CODEBASE_DIR_ON_HOST}}
-- This project's maestro-pulse store folder on the host (where its tools/agents/workflows live): {{PROJECT_HOST_DIR}}
 - Workflow: {{WORKFLOW_PATH}}
-- API host: {{HOST_URL}}
 - Card: {{CARD_TITLE}} (id: {{CARD_ID}})
 
-`project.json` for this project, verbatim:
+Absolute host paths — every relative path elsewhere in this document is
+relative to one of these three:
 
-```json
-{{PROJECT_JSON}}
-```
+{{HOST_ROOTS_LIST}}
 
 ## The card
 
@@ -27,11 +23,11 @@ this specific request:
 
 ### Attachments
 
-Each entry below is a link or a real path on the host machine — nothing has
-been read into this context for you. Treat this the same as the tool list
-below: an index to pick from, not pre-fetched content.
+Each entry is a URL, or a path relative to `project_store_dir` above —
+nothing has been read into this context for you. Treat this the same as the
+tool catalog below: an index to pick from, not pre-fetched content.
 
-{{CARD_ATTACHMENTS}}
+{{CARD_ATTACHMENTS_LIST}}
 
 ----
 
@@ -55,36 +51,64 @@ mission and instructions as your own for the duration of this task.
 
 ## Tools available to you
 
-Each tool below is a script on the host machine (`tool.sh`), with its own
-`.env`/`.env.local` alongside it holding whatever credentials it needs — run
-it from its own directory so those are picked up.
-
 This catalog is an index, not pre-fetched content, the same as the
 attachments above — you choose what to actually run based on each tool's own
-description rather than opening every one. When a common tool and a project
-tool could both do the job, prefer the common tool.
+description rather than opening every one.
 
-### Common tools (available to every project)
+### Common tools
 
-{{COMMON_TOOLS}}
+Paths are relative to `maestro_pulse_root` (declared above).
+
+{{COMMON_TOOLS_LIST}}
 
 ### This agent's own project tools
 
-{{PROJECT_TOOLS}}
+Paths are relative to `project_store_dir` (declared above).
 
-## Moving this card
+{{PROJECT_TOOLS_LIST}}
 
-maestro-pulse tracks this card's column yourself — nothing moves it
-automatically. Find `move-maestro-pulse-card` in the tools above and run it
-to move this exact card to any column by name:
+## Card actions
+
+### Moving this card
+
+Use this to move this card to any column by name (when and where to move it comes from this workflow's own rules):
+```
+{{MOVE_CARD_TOOL_ABS_PATH}} "{{WORKFLOW_PATH}}" "{{CARD_ID}}" "<target column name>"
+```
+
+### Managing this card's attachments
+
+Use `manage-card-attachments` (from the common tools above) to create, list,
+add, or remove this card's attachments. Its four subcommands, ready to run
+for this card:
+
+Create a new attachment file — this attaches it to the card too, and prints
+where to edit it. There is no separate "edit" step: edit the printed path
+directly with your own file tools.
 
 ```
-<move-maestro-pulse-card's tool.sh path> "{{WORKFLOW_PATH}}" "{{CARD_ID}}" "<target column name>"
+{{ATTACH_TOOL_ABS_PATH}} create "{{WORKFLOW_PATH}}" "{{CARD_ID}}" "<original-file-name>"
 ```
 
-*When* and *where* to move it — e.g. Ready → Doing when you start, Doing →
-Done when finished — comes from this workflow's own rules below, not from
-this generic paragraph.
+List what's already attached — a file entry's path is likewise directly
+editable, the same as what `create` just printed:
+
+```
+{{ATTACH_TOOL_ABS_PATH}} list "{{WORKFLOW_PATH}}" "{{CARD_ID}}"
+```
+
+Add a URL (not a file — `create` is for that):
+
+```
+{{ATTACH_TOOL_ABS_PATH}} add "{{WORKFLOW_PATH}}" "{{CARD_ID}}" "<url>"
+```
+
+Remove a URL or file already on this card (use the exact value `list`
+printed):
+
+```
+{{ATTACH_TOOL_ABS_PATH}} remove "{{WORKFLOW_PATH}}" "{{CARD_ID}}" "<attachment>"
+```
 
 ----
 

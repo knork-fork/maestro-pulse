@@ -91,14 +91,14 @@ const CARD_ACTIONS = ['move-up', 'move-down', 'move-right', 'move-to', 'delete',
  * tolerance `ensureRoot` already has for the projects root itself.
  *
  * Content never crosses this API: `createAttachmentFile` only ever writes an
- * *empty* file. The `manage-card-attachments` common tool hands its caller a
- * real host path to that file (via MAESTRO_PULSE_HOST_DIR) so a harness edits
- * it directly with its own file tools — the same reasoning a project's own
- * tools are resolved to host paths for run-manually, rather than proxied
- * through this API. That split is also why there is no "edit" endpoint here:
- * editing is just editing a file on disk, and the one thing worth keeping
- * deterministic is `workflow.json`'s own `attachments` array, which
- * `attachToCard` is the only way to grow.
+ * *empty* file, and `listCardAttachments` only ever hands back a path, never
+ * a file's contents. The `manage-card-attachments` common tool resolves a
+ * real host path (via MAESTRO_PULSE_HOST_DIR) for both, so a harness edits
+ * the file directly with its own file tools. That split is also why there is
+ * no "edit" endpoint here: editing is just editing a file on disk, and the
+ * one thing worth keeping deterministic is `workflow.json`'s own
+ * `attachments` array — `attachToCard`/`detachFromCard` are the only ways it
+ * grows or shrinks.
  */
 const ATTACHMENTS_SUBDIR = 'attachments'
 const MAX_ATTACHMENT_NAME_LENGTH = 100
@@ -208,6 +208,7 @@ const routes = {
   'POST /api/workflow-attachments': createAttachmentFile,
   'GET /api/workflow-attachments': listCardAttachments,
   'PATCH /api/workflow-attachments': attachToCard,
+  'DELETE /api/workflow-attachments': detachFromCard,
   'PUT /api/agent-instructions': updateAgentInstructions,
   'PUT /api/workflow-instructions': updateWorkflowInstructions,
   'GET /skills/add-to-backlog': getAddToBacklogSkill,
@@ -531,7 +532,11 @@ async function createAttachmentFile(req) {
 /**
  * Reads one card's own `attachments` array — lets a harness check what's
  * already on a card (e.g. before deciding whether to create a new file or
- * reuse one) without it ever having to parse `workflow.json` itself.
+ * reuse one) without it ever having to parse `workflow.json` itself. Each
+ * file entry is resolved to a real host path the same way
+ * `createAttachmentFile` resolves a brand-new one, since the point of
+ * listing is to hand the harness something it can open directly; a URL
+ * entry's `hostPath` is `null`, having no file to resolve.
  */
 async function listCardAttachments(_req, url) {
   const target = relativePath(url.searchParams.get('path'))
@@ -541,12 +546,23 @@ async function listCardAttachments(_req, url) {
     throw new HttpError(404, `No such workflow: ${target}`)
   }
 
+  const project = target.split('/').slice(0, -2).join('/')
+  const projectHostDir = MAESTRO_PULSE_HOST_DIR
+    ? path.posix.join(MAESTRO_PULSE_HOST_DIR, 'resources/projects', project)
+    : null
+
   const cardId = validCardId(url.searchParams.get('cardId'))
   const { cards } = await readWorkflowJson(abs)
   const card = cards.find((c) => c.id === cardId)
   if (!card) throw new HttpError(404, `No such card: ${cardId}`)
 
-  return { status: 200, body: { attachments: Array.isArray(card.attachments) ? card.attachments : [] } }
+  const rawAttachments = Array.isArray(card.attachments) ? card.attachments : []
+  const attachments = rawAttachments.map((attachment) => ({
+    attachment,
+    hostPath: !isUrlAttachment(attachment) && projectHostDir ? path.posix.join(projectHostDir, attachment) : null,
+  }))
+
+  return { status: 200, body: { attachments } }
 }
 
 /**
@@ -585,6 +601,42 @@ async function attachToCard(req) {
     if (existing.includes(attachment)) return existing
 
     const updated = [...existing, attachment]
+    data.cards[index] = { ...card, attachments: updated }
+    await writeFile(path.join(abs, WORKFLOW_FILE), `${JSON.stringify(data, null, 2)}\n`)
+    return updated
+  }, `No such workflow: ${target}`)
+
+  return { status: 200, body: { path: target, attachments } }
+}
+
+/**
+ * Removes one file or URL from a card's `attachments` array — idempotently,
+ * the same reasoning as `attachToCard`: a harness can always call this
+ * "remove it if it's there" without checking first. Only the reference is
+ * removed; the file itself, if any, is left on disk untouched — this route
+ * has no opinion on whether anything else still points at it.
+ */
+async function detachFromCard(_req, url) {
+  const target = relativePath(url.searchParams.get('path'))
+  const abs = path.join(ROOT, target)
+
+  if (!(await isDirectory(abs)) || (await directoryType(abs)) !== 'workflow') {
+    throw new HttpError(404, `No such workflow: ${target}`)
+  }
+
+  const cardId = validCardId(url.searchParams.get('cardId'))
+  const attachment = validAttachmentRef(url.searchParams.get('attachment'))
+
+  const attachments = await guardFs(async () => {
+    const data = await readWorkflowJson(abs)
+    const index = data.cards.findIndex((c) => c.id === cardId)
+    if (index === -1) throw new HttpError(404, `No such card: ${cardId}`)
+
+    const card = data.cards[index]
+    const existing = Array.isArray(card.attachments) ? card.attachments : []
+    if (!existing.includes(attachment)) return existing
+
+    const updated = existing.filter((a) => a !== attachment)
     data.cards[index] = { ...card, attachments: updated }
     await writeFile(path.join(abs, WORKFLOW_FILE), `${JSON.stringify(data, null, 2)}\n`)
     return updated
@@ -659,14 +711,17 @@ async function getAddToBacklogSkill(req, url) {
  * needs to pick up and execute one bot-column card by hand — the agent's own
  * instructions/profile fields (handholding/verbosity as prose, not raw
  * numbers) and the workflow's own instructions. Mirrors
- * getAddToBacklogSkill's validation shape for the project/workflow/host
- * half. Also includes both tool catalogs (common tools, plus the agent's own
- * selected project tools) resolved to real host paths via
- * MAESTRO_PULSE_HOST_DIR, and the generic move-maestro-pulse-card procedure.
- * Also includes the card's own `issues` and `attachments` (the latter
- * resolved to a real host path the same way project tools are, when it
- * isn't a bare URL) — both framed to the harness, alongside the tool
- * catalogs, as an index to pick from rather than pre-fetched content.
+ * getAddToBacklogSkill's validation shape for the project/workflow half.
+ * Declares a small set of absolute host roots exactly once
+ * (maestro_pulse_root, project_store_dir, project_codebase_dir), then every
+ * tool/attachment is listed as a path relative to one of those — never a
+ * repeated host-absolute path per entry. The two "meta" tools every card can
+ * act through (move-maestro-pulse-card, manage-card-attachments) are the
+ * deliberate exception: their absolute paths are resolved once each, purely
+ * to hand the harness ready-to-run example commands instead of making it
+ * explore their calling convention itself. `agent.md`/`workflow.md` content
+ * is pasted in as a blockquote so any heading inside it can't be confused
+ * with this template's own section headings.
  */
 async function getRunManuallySkill(req, url) {
   const target = relativePath(url.searchParams.get('path'))
@@ -680,9 +735,6 @@ async function getRunManuallySkill(req, url) {
   if (!(await isDirectory(projectAbs)) || (await directoryType(projectAbs)) !== 'project') {
     throw new HttpError(404, `No such project: ${project}`)
   }
-
-  if (!req.headers.host) throw new HttpError(400, 'Missing Host header')
-  const host = `http://${req.headers.host}`
 
   const projectJson = await guardFs(
     () => readFile(path.join(projectAbs, PROJECT_FILE), 'utf8'),
@@ -740,10 +792,24 @@ async function getRunManuallySkill(req, url) {
   const projectHostDir = MAESTRO_PULSE_HOST_DIR
     ? path.posix.join(MAESTRO_PULSE_HOST_DIR, 'resources/projects', project)
     : null
+  const hostDirUnresolved = '(not resolved — MAESTRO_PULSE_HOST_DIR is not set on the api container; relative paths below cannot be resolved to real host paths)'
 
-  const commonTools = await readToolsForRunManually(COMMON_TOOLS_ROOT, (toolName) =>
-    MAESTRO_PULSE_HOST_DIR ? path.posix.join(MAESTRO_PULSE_HOST_DIR, 'common-tools', toolName, 'tool.sh') : null,
-  )
+  const hostRootsList = renderKeyValueList([
+    ['maestro_pulse_root', MAESTRO_PULSE_HOST_DIR ?? hostDirUnresolved],
+    ['project_store_dir', projectHostDir ?? hostDirUnresolved],
+    ['project_codebase_dir', codebaseDirOnHost ?? '(missing from project.json)'],
+  ])
+
+  const cardAttachmentsList = cardAttachments.length
+    ? renderKeyValueList(cardAttachments.map((attachment, i) => [i + 1, attachment]))
+    : '_None._'
+
+  const commonTools = await readToolsForRunManually(COMMON_TOOLS_ROOT)
+  const commonToolsList = commonTools.length
+    ? renderKeyValueList(
+        commonTools.map((tool) => [path.posix.join('common-tools', tool.name, 'tool.sh'), tool.description]),
+      )
+    : '_None._'
 
   const projectTools = await Promise.all(
     agentTools.map(async (toolRelPath) => {
@@ -758,50 +824,55 @@ async function getRunManuallySkill(req, url) {
           // malformed tool.json: fall through with an empty description
         }
       }
-      return {
-        hostPath: projectHostDir ? path.posix.join(projectHostDir, toolRelPath, 'tool.sh') : null,
-        description,
-        name: toolRelPath.split('/').pop(),
-      }
+      return [path.posix.join(toolRelPath, 'tool.sh'), description]
     }),
   )
+  const projectToolsList = projectTools.length ? renderKeyValueList(projectTools) : '_None._'
 
   const workflowInstructions = await readFile(path.join(abs, WORKFLOW_INSTRUCTIONS_FILE), 'utf8').catch(() => '')
 
   const template = await readFile(RUN_MANUALLY_TEMPLATE, 'utf8')
   const filled = template
     .replaceAll('{{PROJECT_NAME}}', project)
-    .replaceAll('{{PROJECT_JSON}}', projectJson.trim())
-    .replaceAll('{{CODEBASE_DIR_ON_HOST}}', String(codebaseDirOnHost))
-    .replaceAll('{{HOST_URL}}', host)
+    .replaceAll('{{HOST_ROOTS_LIST}}', hostRootsList)
     .replaceAll('{{WORKFLOW_PATH}}', target)
     .replaceAll('{{CARD_ID}}', cardId)
     .replaceAll('{{CARD_TITLE}}', card.title)
     .replaceAll('{{CARD_DESCRIPTION}}', card.description || '')
     .replaceAll('{{CARD_ISSUES}}', renderIssueList(cardIssues))
-    .replaceAll('{{CARD_ATTACHMENTS}}', renderAttachmentList(cardAttachments, projectHostDir))
+    .replaceAll('{{CARD_ATTACHMENTS_LIST}}', cardAttachmentsList)
     .replaceAll('{{AGENT_DESCRIPTION}}', agentDescription)
     .replaceAll('{{AGENT_MISSION}}', agentMission)
     .replaceAll('{{AGENT_HANDHOLDING_PROSE}}', describeSetting(agentHandholding, HANDHOLDING_DESCRIPTIONS))
     .replaceAll('{{AGENT_VERBOSITY_PROSE}}', describeSetting(agentVerbosity, VERBOSITY_DESCRIPTIONS))
-    .replaceAll('{{AGENT_INSTRUCTIONS}}', agentInstructions.trim())
-    .replaceAll('{{WORKFLOW_INSTRUCTIONS}}', workflowInstructions.trim())
-    .replaceAll('{{PROJECT_HOST_DIR}}', projectHostDir ?? 'not configured (set MAESTRO_PULSE_HOST_DIR)')
-    .replaceAll('{{COMMON_TOOLS}}', renderToolList(commonTools))
-    .replaceAll('{{PROJECT_TOOLS}}', renderToolList(projectTools))
+    .replaceAll('{{AGENT_INSTRUCTIONS}}', blockquote(agentInstructions.trim()))
+    .replaceAll('{{WORKFLOW_INSTRUCTIONS}}', blockquote(workflowInstructions.trim()))
+    .replaceAll('{{COMMON_TOOLS_LIST}}', commonToolsList)
+    .replaceAll('{{PROJECT_TOOLS_LIST}}', projectToolsList)
+    .replaceAll('{{MOVE_CARD_TOOL_ABS_PATH}}', hostAbsoluteToolPath('move-maestro-pulse-card'))
+    .replaceAll('{{ATTACH_TOOL_ABS_PATH}}', hostAbsoluteToolPath('manage-card-attachments'))
 
   return { status: 200, body: filled, raw: true }
 }
 
 /**
- * One tool's absolute host path + description, read from its own tool.json.
- * `hostPathFor` isolates the one difference between the two call sites
- * (common tools resolve under MAESTRO_PULSE_HOST_DIR/common-tools, project
- * tools resolve under MAESTRO_PULSE_HOST_DIR/resources/projects/<project>) —
- * never codebase_dir_on_host, which is an unrelated path (see the comment above
- * getRunManuallySkill for why).
+ * Absolute host path to a named common tool's tool.sh, for the two
+ * ready-to-run example commands in the "Card actions" section — the one
+ * deliberate exception to every other tool/attachment being listed as a
+ * relative path (see getRunManuallySkill).
  */
-async function readToolsForRunManually(toolsRoot, hostPathFor) {
+function hostAbsoluteToolPath(toolName) {
+  return MAESTRO_PULSE_HOST_DIR
+    ? path.posix.join(MAESTRO_PULSE_HOST_DIR, 'common-tools', toolName, 'tool.sh')
+    : `<MAESTRO_PULSE_HOST_DIR not configured on the api container — can't build a runnable path for ${toolName}>`
+}
+
+/**
+ * A common tool's own name + description, read from its tool.json. Callers
+ * build the relative path themselves — common tools and project tools join
+ * under different roots (see getRunManuallySkill).
+ */
+async function readToolsForRunManually(toolsRoot) {
   const entries = await readdir(toolsRoot, { withFileTypes: true }).catch(() => [])
   const folders = entries.filter((entry) => entry.isDirectory())
   return Promise.all(
@@ -816,26 +887,18 @@ async function readToolsForRunManually(toolsRoot, hostPathFor) {
           // malformed tool.json: fall through with an empty description
         }
       }
-      return { hostPath: hostPathFor(folder.name), description, name: folder.name }
+      return { description, name: folder.name }
     }),
   )
 }
 
 /**
- * Renders a tool list into the markdown bullet form the template embeds. A
- * tool whose host path could not be resolved (MAESTRO_PULSE_HOST_DIR unset)
- * still gets a line naming it, since telling the harness "the tool exists
- * but its path is unknown" beats silently dropping it.
+ * Renders resolved key/value pairs as plain bullet lines — always the
+ * already-resolved value itself (a real path, or a self-explaining fallback
+ * string), never a placeholder the reader would have to go verify elsewhere.
  */
-function renderToolList(tools) {
-  if (tools.length === 0) return '_None._'
-  return tools
-    .map((tool) =>
-      tool.hostPath
-        ? `- \`${tool.hostPath}\`: ${tool.description || '(no description)'}`
-        : `- ${tool.name} (host path not configured): ${tool.description || '(no description)'}`,
-    )
-    .join('\n')
+function renderKeyValueList(pairs) {
+  return pairs.map(([key, value]) => `- ${key}: ${value}`).join('\n')
 }
 
 /**
@@ -854,21 +917,16 @@ function renderIssueList(issues) {
 }
 
 /**
- * Renders a card's attachments into the markdown bullet form the
- * run-manually template embeds. A URL attachment prints as-is; a file
- * attachment resolves to a real host path under `projectHostDir` — the same
- * value/fallback convention renderToolList uses for a project tool — since
- * the harness needs a path it can actually open, not the maestro-pulse-
- * relative one `workflow.json` stores.
+ * Quotes a block of markdown (an agent's/workflow's own free-text
+ * instructions) with `>` so any heading inside it renders visually and
+ * structurally apart from the run-manually template's own section headings,
+ * rather than blending into the same heading scheme.
  */
-function renderAttachmentList(attachments, projectHostDir) {
-  if (attachments.length === 0) return '_None._'
-  return attachments
-    .map((attachment) => {
-      if (isUrlAttachment(attachment)) return `- ${attachment}`
-      const hostPath = projectHostDir ? path.posix.join(projectHostDir, attachment) : null
-      return hostPath ? `- \`${hostPath}\`` : `- ${attachment} (host path not configured)`
-    })
+function blockquote(text) {
+  if (!text) return '_None._'
+  return text
+    .split('\n')
+    .map((line) => (line ? `> ${line}` : '>'))
     .join('\n')
 }
 

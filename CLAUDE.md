@@ -442,16 +442,23 @@ ever accepts attachment *content*: `POST /api/workflow-attachments`
 (`createAttachmentFile`) only ever writes an *empty* timestamped file and
 hands back both its project-relative path and (via `MAESTRO_PULSE_HOST_DIR`)
 a real host path, so the external harness that asked for it edits that file
-directly with its own file tools, the same reasoning a project's own tools
-are resolved to host paths for run-manually rather than proxied through this
-API. `GET /api/workflow-attachments` (`listCardAttachments`) reads one card's
-current array back, and `PATCH /api/workflow-attachments` (`attachToCard`)
-is the one narrow, idempotent way that array itself grows — attaching
-something already on the card is a no-op, not an error, since a harness is
-meant to call it as "attach this if it isn't already" without checking
-first. All three exist to be called by the `manage-card-attachments` common
-tool's three matching subcommands (`create`/`list`/`attach`), not the
-browser, which only ever renders `attachments`
+directly with its own file tools — the same reasoning behind resolving an
+absolute path for the two always-available common tools in run-manually's
+output (see below) rather than leaving the harness to build one itself.
+`GET /api/workflow-attachments` (`listCardAttachments`) reads one card's
+current array back, resolving each file entry to the same kind of real host
+path `createAttachmentFile` hands back, so a harness can open an existing
+attachment directly too, not just a freshly created one. `PATCH
+/api/workflow-attachments` (`attachToCard`) and `DELETE
+/api/workflow-attachments` (`detachFromCard`) are the only two, narrow,
+idempotent ways that array grows or shrinks — attaching something already on
+the card, or removing something not on it, is a no-op, not an error, since a
+harness is meant to call either as "make sure it is/isn't there" without
+checking first; `detachFromCard` only ever removes the reference; it never
+deletes the underlying file. All four exist to be called by the
+`manage-card-attachments` common tool's four matching subcommands
+(`create`, which also attaches the new file in the same call; `list`; `add`,
+URL-only; `remove`), not the browser, which only ever renders `attachments`
 ([CardDetailModal.tsx](src/components/CardDetailModal.tsx)'s "Attached"
 section and [AttachmentViewModal.tsx](src/components/AttachmentViewModal.tsx))
 — the same "external tool writes, browser only reads" split
@@ -481,30 +488,29 @@ content (empty/missing renders as nothing, so the template reads cleanly
 either way) — as raw markdown, not JSON, the one route in this API that isn't.
 
 `GET /skills/run-manually` (`getRunManuallySkill`) follows the identical
-project/workflow/host validation shape, taking `path` plus a `card` param
-naming one card on that board; it 400s if the card's column is not a bot
-column, since only a bot column has an agent to stand in for. It returns
+project/workflow validation shape, taking `path` plus a `card` param naming
+one card on that board; it 400s if the card's column is not a bot column,
+since only a bot column has an agent to stand in for. It returns
 [run-manually-template.md](server/run-manually-template.md) filled with the
-card's own title/description, its own `issues` and `attachments` (a file
-attachment resolved to a real host path the same way a project tool is,
-rather than left as the maestro-pulse-relative path `workflow.json` stores;
-a URL attachment is passed through as-is), the responsible agent's
-`description`/`mission` fields and its full `agent.md`, and the workflow's
-own `workflow.md` — with `handholding`/`verbosity` rendered as the same
-prose [AgentView.tsx](src/components/AgentView.tsx)/[AgentDialog.tsx](src/components/AgentDialog.tsx)
-already show next to each slider, not as raw numbers. It also includes both
-tool catalogs — every common tool, and the responsible agent's own selected
-project tools (`agent.json`'s `tools`) — each resolved to a real absolute
-host path via `MAESTRO_PULSE_HOST_DIR` (see the architecture section above),
-degrading to a per-tool "host path not configured" note rather than failing
-the whole request when that env var is unset; and the generic
-`move-maestro-pulse-card` card-movement procedure, since an external harness
-picking up a card by hand needs to know that mechanism exists at all. The
-tool catalogs and the attachment list are deliberately framed in the
-template as an index the harness picks from rather than pre-fetched content,
-with a common tool preferred over an overlapping project one — the
-tool-authoring half of that same guidance lives in
-[docs/tools/README.md](docs/tools/README.md).
+card's own fields, the responsible agent's profile/instructions
+(`handholding`/`verbosity` rendered as the same prose
+[AgentView.tsx](src/components/AgentView.tsx)/[AgentDialog.tsx](src/components/AgentDialog.tsx)
+show, not raw numbers; its `agent.md`, and the workflow's own
+`workflow.md`, are both blockquoted so a heading inside either can't be
+mistaken for one of the template's own section headings). Three absolute
+host paths — the maestro-pulse checkout, this project's own store folder,
+and its `codebase_dir_on_host` — are declared once (via
+`MAESTRO_PULSE_HOST_DIR`, see the architecture section above); every
+tool/attachment elsewhere in the output is a path relative to one of those
+rather than a repeated host-absolute path, the one exception being
+`move-maestro-pulse-card`/`manage-card-attachments`, whose paths are
+resolved in full so the template can hand the harness ready-to-run example
+commands for both. Both tool catalogs (every common tool, plus the
+responsible agent's own selected project tools from `agent.json`'s `tools`)
+and the card's own `attachments` are framed as an index the harness picks
+from rather than pre-fetched content, with a common tool preferred over an
+overlapping project one — the tool-authoring half of that same guidance
+lives in [docs/tools/README.md](docs/tools/README.md).
 
 An `agent` is marked and created the same way, one level down inside a
 project's `agents` folder instead — see `scaffoldAgent` in
